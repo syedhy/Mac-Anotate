@@ -158,7 +158,7 @@ class AnnotationCanvasView: NSView, NSTextFieldDelegate {
             }
             
             // Otherwise, see if we hit another annotation body
-            for (index, annotation) in annotations.enumerated().reversed() {
+            for annotation in annotations.reversed() {
                 if AnnotationHitTester.hitTest(point: point, annotation: annotation) != .none {
                     SelectionManager.shared.selectedAnnotationID = annotation.id
                     interactionState = .movingSelection(startPoint: point, originalAnnotation: annotation)
@@ -342,9 +342,8 @@ class AnnotationCanvasView: NSView, NSTextFieldDelegate {
         case .movingSelection(_, let originalAnnotation), .resizingSelection(_, _, let originalAnnotation):
             // End of drag
             // We just update the state
-            if let index = annotations.firstIndex(where: { $0.id == originalAnnotation.id }) {
-                // If it's too small, maybe delete it, but fine for now
-            }
+            // If it's too small, maybe delete it, but fine for now
+            break
         }
         
         interactionState = .idle

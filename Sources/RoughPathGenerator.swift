@@ -104,74 +104,11 @@ class RoughPathGenerator {
             let w = rect.width
             let h = rect.height
             let r = min(16, min(w, h) * 0.25)
-            
-            func p(_ pt: CGPoint) -> CGPoint {
-                let maxVar: CGFloat = 1.0
-                return CGPoint(x: pt.x + random.nextFloat(in: -maxVar...maxVar),
-                               y: pt.y + random.nextFloat(in: -maxVar...maxVar))
-            }
-            
-            let tl = CGPoint(x: rect.minX, y: rect.maxY)
-            let tr = CGPoint(x: rect.maxX, y: rect.maxY)
-            let br = CGPoint(x: rect.maxX, y: rect.minY)
-            let bl = CGPoint(x: rect.minX, y: rect.minY)
-            let k = r * 0.552284749831
-            
-            path.move(to: p(CGPoint(x: tl.x + r, y: tl.y)))
-            path.line(to: p(CGPoint(x: tr.x - r, y: tr.y)))
-            path.curve(to: p(CGPoint(x: tr.x, y: tr.y - r)),
-                       controlPoint1: p(CGPoint(x: tr.x - r + k, y: tr.y)),
-                       controlPoint2: p(CGPoint(x: tr.x, y: tr.y - r + k)))
-            
-            path.line(to: p(CGPoint(x: br.x, y: br.y + r)))
-            path.curve(to: p(CGPoint(x: br.x - r, y: br.y)),
-                       controlPoint1: p(CGPoint(x: br.x, y: br.y + r - k)),
-                       controlPoint2: p(CGPoint(x: br.x - r + k, y: br.y)))
-            
-            path.line(to: p(CGPoint(x: bl.x + r, y: bl.y)))
-            path.curve(to: p(CGPoint(x: bl.x, y: bl.y + r)),
-                       controlPoint1: p(CGPoint(x: bl.x + r - k, y: bl.y)),
-                       controlPoint2: p(CGPoint(x: bl.x, y: bl.y + r - k)))
-            
-            path.line(to: p(CGPoint(x: tl.x, y: tl.y - r)))
-            path.curve(to: p(CGPoint(x: tl.x + r, y: tl.y)),
-                       controlPoint1: p(CGPoint(x: tl.x, y: tl.y - r + k)),
-                       controlPoint2: p(CGPoint(x: tl.x + r - k, y: tl.y)))
-            
-            path.close()
+            path.appendRoundedRect(rect, xRadius: r, yRadius: r)
             
         case .oval:
             guard let rect = annotation.rect else { return path }
-            let kappa: CGFloat = 0.5522848
-            let w = rect.width
-            let h = rect.height
-            let ox = (w / 2) * kappa
-            let oy = (h / 2) * kappa
-            let xe = rect.maxX
-            let ye = rect.maxY
-            let xm = rect.midX
-            let ym = rect.midY
-            
-            func p(_ pt: CGPoint) -> CGPoint {
-                let maxVar: CGFloat = 1.0
-                return CGPoint(x: pt.x + random.nextFloat(in: -maxVar...maxVar),
-                               y: pt.y + random.nextFloat(in: -maxVar...maxVar))
-            }
-            
-            path.move(to: p(CGPoint(x: rect.minX, y: ym)))
-            path.curve(to: p(CGPoint(x: xm, y: ye)),
-                       controlPoint1: p(CGPoint(x: rect.minX, y: ym + oy)),
-                       controlPoint2: p(CGPoint(x: xm - ox, y: ye)))
-            path.curve(to: p(CGPoint(x: xe, y: ym)),
-                       controlPoint1: p(CGPoint(x: xm + ox, y: ye)),
-                       controlPoint2: p(CGPoint(x: xe, y: ym + oy)))
-            path.curve(to: p(CGPoint(x: xm, y: rect.minY)),
-                       controlPoint1: p(CGPoint(x: xe, y: ym - oy)),
-                       controlPoint2: p(CGPoint(x: xm + ox, y: rect.minY)))
-            path.curve(to: p(CGPoint(x: rect.minX, y: ym)),
-                       controlPoint1: p(CGPoint(x: xm - ox, y: rect.minY)),
-                       controlPoint2: p(CGPoint(x: rect.minX, y: ym - oy)))
-            path.close()
+            path.appendOval(in: rect)
             
         case .text, .select:
             break
@@ -222,11 +159,7 @@ class RoughPathGenerator {
             rightPoints.append(CGPoint(x: pt.x - normal.x * halfW, y: pt.y - normal.y * halfW))
         }
         
-        if path.isEmpty {
-            path.move(to: rightPoints[0])
-        } else {
-            path.line(to: rightPoints[0])
-        }
+        path.move(to: rightPoints[0])
         
         if roundCapStart {
             let r = wStart / 2.0

@@ -38,7 +38,7 @@ class AnnotationRenderer {
             if let text = annotation.text, let rect = annotation.textRect {
                 drawText(text, in: rect, color: color, fontSize: annotation.fontSize)
             }
-        } else if annotation.type == .pen || annotation.type == .laser {
+        } else if annotation.type == .pen || annotation.type == .laser || annotation.type == .rectangle || annotation.type == .oval {
             let path1 = RoughPathGenerator.generateDoodlePath(from: annotation, pass: 0)
             path1.lineWidth = annotation.strokeWidth
             path1.lineCapStyle = .round

@@ -376,7 +376,6 @@ class AnnotationCanvasView: NSView, NSTextFieldDelegate {
         // Convert to view coordinates. The click point is already in view coords.
         let textField = NSTextField(frame: NSRect(x: point.x, y: point.y - 12, width: 200, height: 30))
         setupTextField(textField)
-        textField.placeholderString = "Type..."
         
         self.addSubview(textField)
         self.window?.makeFirstResponder(textField)
@@ -407,6 +406,8 @@ class AnnotationCanvasView: NSView, NSTextFieldDelegate {
         textField.focusRingType = .none
         textField.font = NSFont.systemFont(ofSize: 24, weight: .bold)
         textField.textColor = SettingsStore.shared.lastSelectedColor
+        textField.isEditable = true
+        textField.isSelectable = true
     }
     
     func controlTextDidEndEditing(_ obj: Notification) {

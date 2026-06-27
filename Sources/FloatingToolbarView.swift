@@ -91,9 +91,10 @@ struct FloatingToolbarView: View {
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
         .background(
-            VisualEffectView(material: .popover, blendingMode: .behindWindow)
-                .clipShape(RoundedRectangle(cornerRadius: 30))
-                .shadow(color: Color.black.opacity(0.15), radius: 10, x: 0, y: 5)
+            VisualEffectView(material: .hudWindow, blendingMode: .behindWindow)
+                .clipShape(Capsule())
+                .overlay(Capsule().stroke(Color.white.opacity(0.2), lineWidth: 1))
+                .shadow(color: Color.black.opacity(0.2), radius: 15, x: 0, y: 8)
         )
         // Ensure SwiftUI handles mouse clicks properly on the Mac transparent window
         .onHover { _ in NSCursor.arrow.push() }

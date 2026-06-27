@@ -84,14 +84,21 @@ class AnnotationRenderer {
         // Draw selection handles
         if SelectionManager.shared.selectedAnnotationID == annotation.id {
             if let handles = AnnotationHitTester.getHandles(for: annotation) {
-                NSColor.systemBlue.setFill()
-                NSColor.white.setStroke()
+                NSColor.white.setFill()
+                NSColor.systemBlue.setStroke()
                 
+                // Add a subtle shadow to the handles to make them crisp and native
+                let handleShadow = NSShadow()
+                handleShadow.shadowColor = NSColor.black.withAlphaComponent(0.2)
+                handleShadow.shadowOffset = NSSize(width: 0, height: -1)
+                handleShadow.shadowBlurRadius = 2
+                handleShadow.set()
+
                 for (i, handle) in handles.enumerated() {
                     let isControl = (annotation.type == .arrow && i == 1)
                     let handleSize: CGFloat = isControl ? 6.0 : 8.0
                     let rect = NSRect(x: handle.x - handleSize/2, y: handle.y - handleSize/2, width: handleSize, height: handleSize)
-                    let path = isControl ? NSBezierPath(ovalIn: rect) : NSBezierPath(rect: rect)
+                    let path = NSBezierPath(ovalIn: rect) // Always circles
                     
                     path.lineWidth = 1.5
                     path.fill()

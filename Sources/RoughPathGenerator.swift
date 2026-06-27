@@ -68,7 +68,7 @@ class RoughPathGenerator {
                 finalControl = CGPoint(x: baseControl.x + varX, y: baseControl.y + varY)
             }
             
-            let dynamicStrokeWidth = min(16.0, max(4.0, length / 30.0))
+            let dynamicStrokeWidth = min(16.0, max(2.0, length / 30.0))
             let headLength = dynamicStrokeWidth * 3.5
             let headWidth = dynamicStrokeWidth * 3.0
             

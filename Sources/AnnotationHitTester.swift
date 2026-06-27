@@ -55,7 +55,7 @@ struct AnnotationHitTester {
             let dxCtrl = end.x - finalControl.x
             let dyCtrl = end.y - finalControl.y
             let angle = atan2(dyCtrl, dxCtrl)
-            let dynamicStrokeWidth = min(16.0, max(4.0, length / 30.0))
+            let dynamicStrokeWidth = min(16.0, max(2.0, length / 30.0))
             let headLength = dynamicStrokeWidth * 3.5
             let headWidth = dynamicStrokeWidth * 3.0
             let shaftEnd = CGPoint(x: end.x - headLength * cos(angle), y: end.y - headLength * sin(angle))
@@ -108,7 +108,8 @@ struct AnnotationHitTester {
         case .arrow:
             guard let start = annotation.arrowStart, let end = annotation.arrowEnd else { return nil }
             let control = annotation.arrowControlPoint ?? CGPoint(x: (start.x + end.x)/2, y: (start.y + end.y)/2)
-            return [start, control, end]
+            let m = CGPoint(x: 0.25 * start.x + 0.5 * control.x + 0.25 * end.x, y: 0.25 * start.y + 0.5 * control.y + 0.25 * end.y)
+            return [start, m, end]
         case .rectangle, .oval, .text:
             let rect: CGRect
             if annotation.type == .text {

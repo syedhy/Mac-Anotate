@@ -2,7 +2,7 @@ import Cocoa
 
 class AnnotationRenderer {
     
-    static func draw(_ annotations: [Annotation], in context: CGContext) {
+    static func draw(_ annotations: [Annotation], in context: CGContext, isDragging: Bool = false) {
         let now = Date()
         
         for annotation in annotations {
@@ -15,14 +15,14 @@ class AnnotationRenderer {
                 let alpha = max(0, min(1.0, CGFloat(timeLeft / 0.5)))
                 
                 let fadedColor = annotation.color.withAlphaComponent(alpha)
-                drawAnnotation(annotation, color: fadedColor, in: context)
+                drawAnnotation(annotation, color: fadedColor, in: context, isDragging: isDragging)
             } else {
-                drawAnnotation(annotation, color: annotation.color, in: context)
+                drawAnnotation(annotation, color: annotation.color, in: context, isDragging: isDragging)
             }
         }
     }
     
-    private static func drawAnnotation(_ annotation: Annotation, color: NSColor, in context: CGContext) {
+    private static func drawAnnotation(_ annotation: Annotation, color: NSColor, in context: CGContext, isDragging: Bool) {
         NSGraphicsContext.saveGraphicsState()
         let nsContext = NSGraphicsContext(cgContext: context, flipped: false)
         NSGraphicsContext.current = nsContext
@@ -71,7 +71,7 @@ class AnnotationRenderer {
             path2.stroke()
         }
         
-        if SelectionManager.shared.selectedAnnotationID == annotation.id {
+        if !isDragging && SelectionManager.shared.selectedAnnotationID == annotation.id {
             if let handles = AnnotationHitTester.getHandles(for: annotation) {
                 NSColor.white.setFill()
                 NSColor.systemBlue.setStroke()

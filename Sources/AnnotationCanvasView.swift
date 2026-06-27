@@ -267,7 +267,7 @@ class AnnotationCanvasView: NSView, NSTextFieldDelegate {
                     resized.arrowStart = CGPoint(x: resized.arrowStart!.x + dx, y: resized.arrowStart!.y + dy)
                 } else if handleIndex == 1 {
                     let oldCtrl = resized.arrowControlPoint ?? CGPoint(x: (resized.arrowStart!.x + resized.arrowEnd!.x)/2, y: (resized.arrowStart!.y + resized.arrowEnd!.y)/2)
-                    resized.arrowControlPoint = CGPoint(x: oldCtrl.x + dx, y: oldCtrl.y + dy)
+                    resized.arrowControlPoint = CGPoint(x: oldCtrl.x + 2 * dx, y: oldCtrl.y + 2 * dy)
                 } else if handleIndex == 2 {
                     resized.arrowEnd = CGPoint(x: resized.arrowEnd!.x + dx, y: resized.arrowEnd!.y + dy)
                 }
@@ -466,17 +466,24 @@ class AnnotationCanvasView: NSView, NSTextFieldDelegate {
         window?.makeFirstResponder(self)
     }
     
+    private var isDragging: Bool {
+        if case .idle = interactionState {
+            return false
+        }
+        return true
+    }
+
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
         
         guard let context = NSGraphicsContext.current?.cgContext else { return }
         
         // Draw confirmed annotations
-        AnnotationRenderer.draw(annotations, in: context)
+        AnnotationRenderer.draw(annotations, in: context, isDragging: isDragging)
         
         // Draw current in-progress annotation
         if let current = currentAnnotation {
-            AnnotationRenderer.draw([current], in: context)
+            AnnotationRenderer.draw([current], in: context, isDragging: isDragging)
         }
     }
 }

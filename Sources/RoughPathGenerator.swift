@@ -101,40 +101,44 @@ class RoughPathGenerator {
             
         case .rectangle:
             guard let rect = annotation.rect else { return path }
+            let w = rect.width
+            let h = rect.height
+            let r = min(16, min(w, h) * 0.25)
+            
+            func p(_ pt: CGPoint) -> CGPoint {
+                let maxVar: CGFloat = 1.0
+                return CGPoint(x: pt.x + random.nextFloat(in: -maxVar...maxVar),
+                               y: pt.y + random.nextFloat(in: -maxVar...maxVar))
+            }
+            
             let tl = CGPoint(x: rect.minX, y: rect.maxY)
             let tr = CGPoint(x: rect.maxX, y: rect.maxY)
             let br = CGPoint(x: rect.maxX, y: rect.minY)
             let bl = CGPoint(x: rect.minX, y: rect.minY)
+            let k = r * 0.552284749831
             
-            let baseWidth = annotation.strokeWidth
-            let overlapX = baseWidth * random.nextFloat(in: 0.5...1.5)
-            let overlapY = baseWidth * random.nextFloat(in: 0.5...1.5)
+            path.move(to: p(CGPoint(x: tl.x + r, y: tl.y)))
+            path.line(to: p(CGPoint(x: tr.x - r, y: tr.y)))
+            path.curve(to: p(CGPoint(x: tr.x, y: tr.y - r)),
+                       controlPoint1: p(CGPoint(x: tr.x - r + k, y: tr.y)),
+                       controlPoint2: p(CGPoint(x: tr.x, y: tr.y - r + k)))
             
-            func rw() -> CGFloat { return baseWidth * random.nextFloat(in: 0.6...1.4) }
+            path.line(to: p(CGPoint(x: br.x, y: br.y + r)))
+            path.curve(to: p(CGPoint(x: br.x - r, y: br.y)),
+                       controlPoint1: p(CGPoint(x: br.x, y: br.y + r - k)),
+                       controlPoint2: p(CGPoint(x: br.x - r + k, y: br.y)))
             
-            let tL_ext = CGPoint(x: tl.x - overlapX, y: tl.y + random.nextFloat(in: -2...2))
-            let tR_ext = CGPoint(x: tr.x + overlapX, y: tr.y + random.nextFloat(in: -2...2))
-            let bowTop = random.nextFloat(in: 0.02...0.04) * rect.width
-            let cTop = CGPoint(x: rect.midX, y: tl.y + bowTop)
-            addVariableWidthLine(to: path, from: tL_ext, to: tR_ext, control: cTop, wStart: rw(), wMid: rw(), wEnd: rw(), roundCapStart: true, roundCapEnd: true)
+            path.line(to: p(CGPoint(x: bl.x + r, y: bl.y)))
+            path.curve(to: p(CGPoint(x: bl.x, y: bl.y + r)),
+                       controlPoint1: p(CGPoint(x: bl.x + r - k, y: bl.y)),
+                       controlPoint2: p(CGPoint(x: bl.x, y: bl.y + r - k)))
             
-            let rT_ext = CGPoint(x: tr.x + random.nextFloat(in: -2...2), y: tr.y + overlapY)
-            let rB_ext = CGPoint(x: br.x + random.nextFloat(in: -2...2), y: br.y - overlapY)
-            let bowRight = random.nextFloat(in: 0.02...0.04) * rect.height
-            let cRight = CGPoint(x: tr.x + bowRight, y: rect.midY)
-            addVariableWidthLine(to: path, from: rT_ext, to: rB_ext, control: cRight, wStart: rw(), wMid: rw(), wEnd: rw(), roundCapStart: true, roundCapEnd: true)
+            path.line(to: p(CGPoint(x: tl.x, y: tl.y - r)))
+            path.curve(to: p(CGPoint(x: tl.x + r, y: tl.y)),
+                       controlPoint1: p(CGPoint(x: tl.x, y: tl.y - r + k)),
+                       controlPoint2: p(CGPoint(x: tl.x + r - k, y: tl.y)))
             
-            let bR_ext = CGPoint(x: br.x + overlapX, y: br.y + random.nextFloat(in: -2...2))
-            let bL_ext = CGPoint(x: bl.x - overlapX, y: bl.y + random.nextFloat(in: -2...2))
-            let bowBottom = random.nextFloat(in: 0.02...0.04) * rect.width
-            let cBottom = CGPoint(x: rect.midX, y: br.y - bowBottom)
-            addVariableWidthLine(to: path, from: bR_ext, to: bL_ext, control: cBottom, wStart: rw(), wMid: rw(), wEnd: rw(), roundCapStart: true, roundCapEnd: true)
-            
-            let lB_ext = CGPoint(x: bl.x + random.nextFloat(in: -2...2), y: bl.y - overlapY)
-            let lT_ext = CGPoint(x: tl.x + random.nextFloat(in: -2...2), y: tl.y + overlapY)
-            let bowLeft = random.nextFloat(in: 0.02...0.04) * rect.height
-            let cLeft = CGPoint(x: tl.x - bowLeft, y: rect.midY)
-            addVariableWidthLine(to: path, from: lB_ext, to: lT_ext, control: cLeft, wStart: rw(), wMid: rw(), wEnd: rw(), roundCapStart: true, roundCapEnd: true)
+            path.close()
             
         case .oval:
             guard let rect = annotation.rect else { return path }
@@ -148,40 +152,26 @@ class RoughPathGenerator {
             let xm = rect.midX
             let ym = rect.midY
             
-            func p(_ val: CGFloat, maxScale: CGFloat) -> CGFloat {
-                return val + random.nextFloat(in: -maxScale...maxScale)
+            func p(_ pt: CGPoint) -> CGPoint {
+                let maxVar: CGFloat = 1.0
+                return CGPoint(x: pt.x + random.nextFloat(in: -maxVar...maxVar),
+                               y: pt.y + random.nextFloat(in: -maxVar...maxVar))
             }
             
-            let scaleX = w * 0.05
-            let scaleY = h * 0.05
-            
-            let points = [
-                CGPoint(x: rect.minX, y: ym),
-                CGPoint(x: xm, y: ye),
-                CGPoint(x: xe, y: ym),
-                CGPoint(x: xm, y: rect.minY)
-            ]
-            let controls1 = [
-                CGPoint(x: rect.minX, y: p(ym + oy, maxScale: scaleY)),
-                CGPoint(x: p(xm + ox, maxScale: scaleX), y: ye),
-                CGPoint(x: xe, y: p(ym - oy, maxScale: scaleY)),
-                CGPoint(x: p(xm - ox, maxScale: scaleX), y: rect.minY)
-            ]
-            let controls2 = [
-                CGPoint(x: p(xm - ox, maxScale: scaleX), y: ye),
-                CGPoint(x: xe, y: p(ym + oy, maxScale: scaleY)),
-                CGPoint(x: p(xm + ox, maxScale: scaleX), y: rect.minY),
-                CGPoint(x: rect.minX, y: p(ym - oy, maxScale: scaleY))
-            ]
-            
-            let baseW = annotation.strokeWidth
-            let widths = [
-                baseW * random.nextFloat(in: 0.6...1.4),
-                baseW * random.nextFloat(in: 0.6...1.4),
-                baseW * random.nextFloat(in: 0.6...1.4),
-                baseW * random.nextFloat(in: 0.6...1.4)
-            ]
-            addVariableWidthContinuousCubic(to: path, points: points, controls1: controls1, controls2: controls2, widths: widths)
+            path.move(to: p(CGPoint(x: rect.minX, y: ym)))
+            path.curve(to: p(CGPoint(x: xm, y: ye)),
+                       controlPoint1: p(CGPoint(x: rect.minX, y: ym + oy)),
+                       controlPoint2: p(CGPoint(x: xm - ox, y: ye)))
+            path.curve(to: p(CGPoint(x: xe, y: ym)),
+                       controlPoint1: p(CGPoint(x: xm + ox, y: ye)),
+                       controlPoint2: p(CGPoint(x: xe, y: ym + oy)))
+            path.curve(to: p(CGPoint(x: xm, y: rect.minY)),
+                       controlPoint1: p(CGPoint(x: xe, y: ym - oy)),
+                       controlPoint2: p(CGPoint(x: xm + ox, y: rect.minY)))
+            path.curve(to: p(CGPoint(x: rect.minX, y: ym)),
+                       controlPoint1: p(CGPoint(x: xm - ox, y: rect.minY)),
+                       controlPoint2: p(CGPoint(x: rect.minX, y: ym - oy)))
+            path.close()
             
         case .text, .select:
             break

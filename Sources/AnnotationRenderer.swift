@@ -51,23 +51,40 @@ class AnnotationRenderer {
                 arrowPath.fill()
             }
             
-            // Single clean solid pass to prevent weird overlaps
-            let path = RoughPathGenerator.generateDoodlePath(from: annotation, pass: 0)
+            // Pass 0: Full opacity
+            let path1 = RoughPathGenerator.generateDoodlePath(from: annotation, pass: 0)
             
-            // For arrows, dynamic stroke width based on length
+            // Dynamic stroke width based on length
             if annotation.type == .arrow, let s = annotation.arrowStart, let e = annotation.arrowEnd {
                 let length = hypot(e.x - s.x, e.y - s.y)
-                // Base thickness 4, scales up to 16 based on length (max at ~500 points)
                 let dynamicWidth = min(16.0, max(4.0, length / 30.0))
-                path.lineWidth = dynamicWidth
+                path1.lineWidth = dynamicWidth
             } else {
-                path.lineWidth = annotation.strokeWidth
+                path1.lineWidth = annotation.strokeWidth
             }
             
-            path.lineCapStyle = .round
-            path.lineJoinStyle = .round
+            path1.lineCapStyle = .round
+            path1.lineJoinStyle = .round
             color.setStroke()
-            path.stroke()
+            path1.stroke()
+            
+            // Pass 1: Lower opacity (for double stroke effect on shapes)
+            if annotation.type != .pen && annotation.type != .laser {
+                let path2 = RoughPathGenerator.generateDoodlePath(from: annotation, pass: 1)
+                
+                if annotation.type == .arrow, let s = annotation.arrowStart, let e = annotation.arrowEnd {
+                    let length = hypot(e.x - s.x, e.y - s.y)
+                    let dynamicWidth = min(16.0, max(4.0, length / 30.0))
+                    path2.lineWidth = dynamicWidth
+                } else {
+                    path2.lineWidth = annotation.strokeWidth
+                }
+                
+                path2.lineCapStyle = .round
+                path2.lineJoinStyle = .round
+                color.withAlphaComponent(0.65).setStroke()
+                path2.stroke()
+            }
         }
         
         // Draw selection handles

@@ -321,8 +321,11 @@ class AnnotationCanvasView: NSView, NSTextFieldDelegate {
             
             if finalAnnotation.type == .arrow {
                 finalAnnotation.arrowEnd = point
-                finalAnnotation.arrowControlPoint = CGPoint(x: (finalAnnotation.arrowStart!.x + point.x) / 2, y: (finalAnnotation.arrowStart!.y + point.y) / 2)
-                annotations.append(finalAnnotation)
+                // Only create the arrow if the user dragged a minimum distance
+                if let start = finalAnnotation.arrowStart, start.distance(to: point) > 5.0 {
+                    finalAnnotation.arrowControlPoint = CGPoint(x: (start.x + point.x) / 2, y: (start.y + point.y) / 2)
+                    annotations.append(finalAnnotation)
+                }
             } else if finalAnnotation.type == .rectangle || finalAnnotation.type == .oval {
                 let originalStart = finalAnnotation.points.first ?? point
                 finalAnnotation.rect = CGRect(

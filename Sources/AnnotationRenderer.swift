@@ -2,10 +2,18 @@ import Cocoa
 
 class AnnotationRenderer {
     
-    static func draw(_ annotations: [Annotation], in context: CGContext, isDragging: Bool = false) {
+    static func draw(_ annotations: [Annotation], in context: CGContext, isDragging: Bool = false, hoveredID: UUID? = nil) {
         let now = Date()
         
         for annotation in annotations {
+            let isHovered = (annotation.id == hoveredID)
+            let isSelected = (SelectionManager.shared.selectedAnnotationID == annotation.id)
+            
+            var color = annotation.color
+            if isHovered && !isSelected {
+                color = color.blended(withFraction: 0.3, of: .white) ?? color
+            }
+            
             if let expiresAt = annotation.expiresAt {
                 if now > expiresAt {
                     continue
@@ -14,10 +22,10 @@ class AnnotationRenderer {
                 let timeLeft = expiresAt.timeIntervalSince(now)
                 let alpha = max(0, min(1.0, CGFloat(timeLeft / 0.5)))
                 
-                let fadedColor = annotation.color.withAlphaComponent(alpha)
+                let fadedColor = color.withAlphaComponent(alpha)
                 drawAnnotation(annotation, color: fadedColor, in: context, isDragging: isDragging)
             } else {
-                drawAnnotation(annotation, color: annotation.color, in: context, isDragging: isDragging)
+                drawAnnotation(annotation, color: color, in: context, isDragging: isDragging)
             }
         }
     }

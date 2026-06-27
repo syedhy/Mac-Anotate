@@ -6,8 +6,21 @@ class AnnotationCanvasView: NSView, NSTextFieldDelegate {
     private var currentAnnotation: Annotation?
     private var laserTimer: Timer?
     
-    // For text entry
+    private var editingTextIndex: Int?
     private var activeTextField: NSTextField?
+    private var hoveredAnnotationID: UUID?
+    private var trackingArea: NSTrackingArea?
+    
+    override var acceptsFirstResponder: Bool { true }
+    
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let ta = trackingArea {
+            removeTrackingArea(ta)
+        }
+        trackingArea = NSTrackingArea(rect: bounds, options: [.activeInKeyWindow, .mouseMoved, .inVisibleRect], owner: self, userInfo: nil)
+        addTrackingArea(trackingArea!)
+    }
     
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -31,10 +44,6 @@ class AnnotationCanvasView: NSView, NSTextFieldDelegate {
     
     deinit {
         laserTimer?.invalidate()
-    }
-    
-    override var acceptsFirstResponder: Bool {
-        return true
     }
     
     private func checkForActiveLasers() {
@@ -129,6 +138,25 @@ class AnnotationCanvasView: NSView, NSTextFieldDelegate {
     }
     
     private var interactionState: InteractionState = .idle
+    
+    override func mouseMoved(with event: NSEvent) {
+        let point = convert(event.locationInWindow, from: nil)
+        var newHover: UUID? = nil
+        
+        if ToolManager.shared.activeTool == .select {
+            for annotation in annotations.reversed() {
+                if AnnotationHitTester.hitTest(point: point, annotation: annotation) != .none {
+                    newHover = annotation.id
+                    break
+                }
+            }
+        }
+        
+        if hoveredAnnotationID != newHover {
+            hoveredAnnotationID = newHover
+            needsDisplay = true
+        }
+    }
     
     override func mouseDown(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
@@ -321,12 +349,14 @@ class AnnotationCanvasView: NSView, NSTextFieldDelegate {
         case .drawingNewAnnotation:
             guard var finalAnnotation = currentAnnotation else { return }
             
+            var annotationAdded = false
             if finalAnnotation.type == .arrow {
                 finalAnnotation.arrowEnd = point
                 // Only create the arrow if the user dragged a minimum distance
                 if let start = finalAnnotation.arrowStart, start.distance(to: point) > 5.0 {
                     finalAnnotation.arrowControlPoint = CGPoint(x: (start.x + point.x) / 2, y: (start.y + point.y) / 2)
                     annotations.append(finalAnnotation)
+                    annotationAdded = true
                 }
             } else if finalAnnotation.type == .rectangle || finalAnnotation.type == .oval {
                 let originalStart = finalAnnotation.points.first ?? point
@@ -339,12 +369,18 @@ class AnnotationCanvasView: NSView, NSTextFieldDelegate {
                 finalAnnotation.points.removeAll()
                 if (finalAnnotation.rect?.width ?? 0) > 1 || (finalAnnotation.rect?.height ?? 0) > 1 {
                     annotations.append(finalAnnotation)
+                    annotationAdded = true
                 }
             } else {
                 finalAnnotation.points.append(point)
                 if finalAnnotation.points.count > 1 || finalAnnotation.type == .pen || finalAnnotation.type == .laser {
                     annotations.append(finalAnnotation)
+                    annotationAdded = true
                 }
+            }
+            
+            if !annotationAdded && ToolManager.shared.activeTool != .select && ToolManager.shared.activeTool != .text {
+                ToolManager.shared.activeTool = .select
             }
             
             if ToolManager.shared.activeTool == .select {
@@ -365,9 +401,6 @@ class AnnotationCanvasView: NSView, NSTextFieldDelegate {
         interactionState = .idle
         needsDisplay = true
     }
-    
-    private var editingTextIndex: Int?
-    
     private func startTextEditing(at point: CGPoint) {
         if let existing = activeTextField {
             existing.removeFromSuperview()
@@ -412,6 +445,15 @@ class AnnotationCanvasView: NSView, NSTextFieldDelegate {
         textField.isSelectable = true
     }
     
+    func control(_ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
+        if commandSelector == #selector(NSResponder.cancelOperation(_:)) {
+            // Escape key finishes editing
+            self.window?.makeFirstResponder(self)
+            return true
+        }
+        return false
+    }
+    
     func controlTextDidEndEditing(_ obj: Notification) {
         guard let textField = activeTextField else { return }
         let text = textField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -426,6 +468,8 @@ class AnnotationCanvasView: NSView, NSTextFieldDelegate {
                 annotations[index].text = text
                 annotations[index].textRect = rect
                 annotations[index].fontSize = font.pointSize
+                ToolManager.shared.activeTool = .select
+                SelectionManager.shared.selectedAnnotationID = annotations[index].id
             } else {
                 var annotation = Annotation(type: .text, color: SettingsStore.shared.lastSelectedColor, strokeWidth: SettingsStore.shared.lastSelectedStrokeWidth)
                 annotation.text = text
@@ -433,10 +477,8 @@ class AnnotationCanvasView: NSView, NSTextFieldDelegate {
                 annotation.fontSize = font.pointSize
                 annotations.append(annotation)
                 
-                // Also select it
-                if ToolManager.shared.activeTool == .select {
-                    SelectionManager.shared.selectedAnnotationID = annotation.id
-                }
+                ToolManager.shared.activeTool = .select
+                SelectionManager.shared.selectedAnnotationID = annotation.id
             }
         } else {
             // Empty text
@@ -479,9 +521,9 @@ class AnnotationCanvasView: NSView, NSTextFieldDelegate {
         guard let context = NSGraphicsContext.current?.cgContext else { return }
         
         // Draw confirmed annotations
-        AnnotationRenderer.draw(annotations, in: context, isDragging: isDragging)
+        AnnotationRenderer.draw(annotations, in: context, hoveredID: hoveredAnnotationID)
         
-        // Draw current in-progress annotation
+        // Draw in-progress annotation
         if let current = currentAnnotation {
             AnnotationRenderer.draw([current], in: context, isDragging: isDragging)
         }

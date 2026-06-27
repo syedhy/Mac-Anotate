@@ -26,9 +26,19 @@ struct AnnotationHitTester {
         // Then check body
         switch annotation.type {
         case .pen, .laser:
-            // Just check distance to any point
-            for p in annotation.points {
-                if point.distance(to: p) < hitTolerance { return .body }
+            guard annotation.points.count > 0 else { return .none }
+            if annotation.points.count == 1 {
+                if point.distance(to: annotation.points[0]) < hitTolerance { return .body }
+                return .none
+            }
+            
+            var prevPoint = annotation.points[0]
+            for i in 1..<annotation.points.count {
+                let currentPoint = annotation.points[i]
+                if distanceToSegment(p: point, a: prevPoint, b: currentPoint) < hitTolerance {
+                    return .body
+                }
+                prevPoint = currentPoint
             }
         case .arrow:
             guard let start = annotation.arrowStart, let end = annotation.arrowEnd else { return .none }

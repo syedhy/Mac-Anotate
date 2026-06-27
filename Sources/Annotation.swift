@@ -40,6 +40,7 @@ struct Annotation: Identifiable {
     var dynamicArrowStrokeWidth: CGFloat {
         guard type == .arrow, let start = arrowStart, let end = arrowEnd else { return strokeWidth }
         let length = hypot(end.x - start.x, end.y - start.y)
-        return min(16.0, max(2.0, length / 30.0))
+        let scale = length / 100.0
+        return min(strokeWidth * 2.5, max(strokeWidth * 0.5, strokeWidth * scale))
     }
 }

@@ -1,7 +1,7 @@
 import Cocoa
 
 struct AnnotationHitTester {
-    static let hitTolerance: CGFloat = 10.0
+    static let hitTolerance: CGFloat = 15.0
     
     enum HitResult: Equatable {
         case none
@@ -26,24 +26,74 @@ struct AnnotationHitTester {
         // Then check body
         switch annotation.type {
         case .pen, .laser:
-            // Just check distance to any point
-            for p in annotation.points {
-                if point.distance(to: p) < hitTolerance { return .body }
+            guard annotation.points.count > 0 else { return .none }
+            if annotation.points.count == 1 {
+                if point.distance(to: annotation.points[0]) < hitTolerance { return .body }
+                return .none
+            }
+            
+            var prevPoint = annotation.points[0]
+            for i in 1..<annotation.points.count {
+                let currentPoint = annotation.points[i]
+                if distanceToSegment(p: point, a: prevPoint, b: currentPoint) < hitTolerance {
+                    return .body
+                }
+                prevPoint = currentPoint
             }
         case .arrow:
             guard let start = annotation.arrowStart, let end = annotation.arrowEnd else { return .none }
-            let control = annotation.arrowControlPoint ?? CGPoint(x: (start.x + end.x) / 2, y: (start.y + end.y) / 2)
+            let baseControl = annotation.arrowControlPoint ?? CGPoint(x: (start.x + end.x) / 2, y: (start.y + end.y) / 2)
             
-            // Sample distance to quadratic bezier curve
-            var minDistance: CGFloat = .infinity
-            let steps = 20
-            for i in 0...steps {
-                let t = CGFloat(i) / CGFloat(steps)
-                let x = pow(1 - t, 2) * start.x + 2 * (1 - t) * t * control.x + pow(t, 2) * end.x
-                let y = pow(1 - t, 2) * start.y + 2 * (1 - t) * t * control.y + pow(t, 2) * end.y
-                let d = point.distance(to: CGPoint(x: x, y: y))
-                if d < minDistance { minDistance = d }
+            var random = RoughPathGenerator.SeededRandom(seed: annotation.roughnessSeed)
+            let dx = end.x - start.x
+            let dy = end.y - start.y
+            let length = hypot(dx, dy)
+            let isStraight = annotation.arrowControlPoint == nil
+            var finalControl = baseControl
+            
+            if isStraight {
+                let dirX = dx / max(length, 1)
+                let dirY = dy / max(length, 1)
+                let bowAmount = random.nextFloat(in: -0.05...0.05) * length
+                finalControl = CGPoint(x: baseControl.x - dirY * bowAmount, y: baseControl.y + dirX * bowAmount)
+            } else {
+                let varX = random.nextFloat(in: -0.01...0.01) * length
+                let varY = random.nextFloat(in: -0.01...0.01) * length
+                finalControl = CGPoint(x: baseControl.x + varX, y: baseControl.y + varY)
             }
+            
+            let dxCtrl = end.x - finalControl.x
+            let dyCtrl = end.y - finalControl.y
+            let angle = atan2(dyCtrl, dxCtrl)
+            let dynamicStrokeWidth = min(16.0, max(2.0, length / 30.0))
+            let headLength = dynamicStrokeWidth * 3.5
+            let headWidth = dynamicStrokeWidth * 3.0
+            let shaftEnd = CGPoint(x: end.x - headLength * cos(angle), y: end.y - headLength * sin(angle))
+            
+            var minDistance: CGFloat = .infinity
+            let steps = 50
+            var prevPoint = start
+            for i in 1...steps {
+                let t = CGFloat(i) / CGFloat(steps)
+                let x = pow(1 - t, 2) * start.x + 2 * (1 - t) * t * finalControl.x + pow(t, 2) * shaftEnd.x
+                let y = pow(1 - t, 2) * start.y + 2 * (1 - t) * t * finalControl.y + pow(t, 2) * shaftEnd.y
+                let currentPoint = CGPoint(x: x, y: y)
+                let d = distanceToSegment(p: point, a: prevPoint, b: currentPoint)
+                if d < minDistance { minDistance = d }
+                prevPoint = currentPoint
+            }
+            
+            let p1 = CGPoint(x: end.x - headLength * cos(angle) - headWidth/2 * sin(angle),
+                             y: end.y - headLength * sin(angle) + headWidth/2 * cos(angle))
+            let p2 = CGPoint(x: end.x - headLength * cos(angle) + headWidth/2 * sin(angle),
+                             y: end.y - headLength * sin(angle) - headWidth/2 * cos(angle))
+            
+            let d1 = distanceToSegment(p: point, a: end, b: p1)
+            let d2 = distanceToSegment(p: point, a: p1, b: p2)
+            let d3 = distanceToSegment(p: point, a: p2, b: end)
+            
+            minDistance = min(minDistance, min(d1, min(d2, d3)))
+            
             if minDistance < hitTolerance { return .body }
         case .rectangle, .oval:
             guard let rect = annotation.rect else { return .none }
@@ -68,7 +118,31 @@ struct AnnotationHitTester {
         case .arrow:
             guard let start = annotation.arrowStart, let end = annotation.arrowEnd else { return nil }
             let control = annotation.arrowControlPoint ?? CGPoint(x: (start.x + end.x)/2, y: (start.y + end.y)/2)
-            return [start, control, end]
+            let dx = end.x - start.x
+            let dy = end.y - start.y
+            let length = hypot(dx, dy)
+            let strokeW = annotation.dynamicArrowStrokeWidth
+            let headL = strokeW * 3.5
+            let dxCtrl = end.x - control.x
+            let dyCtrl = end.y - control.y
+            let angle = atan2(dyCtrl, dxCtrl)
+            let shaftEnd = CGPoint(x: end.x - headL * 1.2 * cos(angle), y: end.y - headL * 1.2 * sin(angle))
+            
+            let m = CGPoint(x: 0.25 * start.x + 0.5 * control.x + 0.25 * shaftEnd.x, y: 0.25 * start.y + 0.5 * control.y + 0.25 * shaftEnd.y)
+            
+            let handleRadius: CGFloat = 6.0
+            
+            let startToM_dx = m.x - start.x
+            let startToM_dy = m.y - start.y
+            let startToMLen = hypot(startToM_dx, startToM_dy)
+            let insetStart = startToMLen > 0 ? CGPoint(x: start.x + (startToM_dx/startToMLen)*handleRadius, y: start.y + (startToM_dy/startToMLen)*handleRadius) : start
+            
+            let endToM_dx = m.x - end.x
+            let endToM_dy = m.y - end.y
+            let endToMLen = hypot(endToM_dx, endToM_dy)
+            let insetEnd = endToMLen > 0 ? CGPoint(x: end.x + (endToM_dx/endToMLen)*handleRadius, y: end.y + (endToM_dy/endToMLen)*handleRadius) : end
+
+            return [insetStart, m, insetEnd]
         case .rectangle, .oval, .text:
             let rect: CGRect
             if annotation.type == .text {
@@ -83,6 +157,25 @@ struct AnnotationHitTester {
                 CGPoint(x: rect.maxX, y: rect.minY),
                 CGPoint(x: rect.minX, y: rect.maxY),
                 CGPoint(x: rect.maxX, y: rect.maxY)
+            ]
+        case .pen, .laser:
+            guard !annotation.points.isEmpty else { return nil }
+            var minX = annotation.points[0].x
+            var minY = annotation.points[0].y
+            var maxX = annotation.points[0].x
+            var maxY = annotation.points[0].y
+            for p in annotation.points {
+                if p.x < minX { minX = p.x }
+                if p.x > maxX { maxX = p.x }
+                if p.y < minY { minY = p.y }
+                if p.y > maxY { maxY = p.y }
+            }
+            let pad: CGFloat = 5.0
+            return [
+                CGPoint(x: minX - pad, y: minY - pad),
+                CGPoint(x: maxX + pad, y: minY - pad),
+                CGPoint(x: minX - pad, y: maxY + pad),
+                CGPoint(x: maxX + pad, y: maxY + pad)
             ]
         default:
             return nil

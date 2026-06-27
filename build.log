@@ -1,7 +1,7 @@
 Command line invocation:
     /Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild -scheme Anotate -derivedDataPath build
 
-2026-06-28 00:58:38.272 xcodebuild[20515:7859061] [MT] IDERunDestination: Supported platforms for the buildables in the current scheme is empty.
+2026-06-28 01:48:44.241 xcodebuild[21959:7914043] [MT] IDERunDestination: Supported platforms for the buildables in the current scheme is empty.
 --- xcodebuild: WARNING: Using the first of multiple matching destinations:
 { platform:macOS, arch:arm64, id:00008122-000A1100017A001C, name:My Mac }
 { platform:macOS, arch:x86_64, id:00008122-000A1100017A001C, name:My Mac }
@@ -31,8 +31,8 @@ ExecuteExternalTool /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeD
 
 ExecuteExternalTool /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/ld -version_details
 
-Build description signature: a282220cffbc8320904a5acca31d7358
-Build description path: /Users/hyder/Documents/Projects/Anotate/build/Build/Intermediates.noindex/XCBuildData/a282220cffbc8320904a5acca31d7358.xcbuilddata
+Build description signature: 5e4dda28be179f14c56351885ad6ec43
+Build description path: /Users/hyder/Documents/Projects/Anotate/build/Build/Intermediates.noindex/XCBuildData/5e4dda28be179f14c56351885ad6ec43.xcbuilddata
 ClangStatCache /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang-stat-cache /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.5.sdk /Users/hyder/Documents/Projects/Anotate/build/SDKStatCaches.noindex/macosx26.5-25F70-e082c4a02f00227109f4ed75e425c832.sdkstatcache
     cd /Users/hyder/Documents/Projects/Anotate/Anotate.xcodeproj
     /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang-stat-cache /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.5.sdk -o /Users/hyder/Documents/Projects/Anotate/build/SDKStatCaches.noindex/macosx26.5-25F70-e082c4a02f00227109f4ed75e425c832.sdkstatcache
@@ -47,9 +47,8 @@ EmitSwiftModule normal arm64 (in target 'Anotate' from project 'Anotate')
     cd /Users/hyder/Documents/Projects/Anotate
     
 
-SwiftCompile normal arm64 Compiling\ RoughPathGenerator.swift /Users/hyder/Documents/Projects/Anotate/Sources/RoughPathGenerator.swift (in target 'Anotate' from project 'Anotate')
-
-SwiftCompile normal arm64 /Users/hyder/Documents/Projects/Anotate/Sources/RoughPathGenerator.swift (in target 'Anotate' from project 'Anotate')
+SwiftCompile normal arm64 Compiling\ AnnotationCanvasView.swift /Users/hyder/Documents/Projects/Anotate/Sources/AnnotationCanvasView.swift (in target 'Anotate' from project 'Anotate')
+SwiftCompile normal arm64 /Users/hyder/Documents/Projects/Anotate/Sources/AnnotationCanvasView.swift (in target 'Anotate' from project 'Anotate')
     cd /Users/hyder/Documents/Projects/Anotate
     
 
@@ -58,10 +57,22 @@ SwiftCompile normal arm64 Compiling\ AnnotationRenderer.swift /Users/hyder/Docum
 SwiftCompile normal arm64 /Users/hyder/Documents/Projects/Anotate/Sources/AnnotationRenderer.swift (in target 'Anotate' from project 'Anotate')
     cd /Users/hyder/Documents/Projects/Anotate
     
+/Users/hyder/Documents/Projects/Anotate/Sources/AnnotationRenderer.swift:94:22: warning: immutable value 'i' was never used; consider replacing with '_' or removing it
+                for (i, handle) in handles.enumerated() {
+                     ^
+                     _
+
+SwiftCompile normal arm64 Compiling\ Annotation.swift /Users/hyder/Documents/Projects/Anotate/Sources/Annotation.swift (in target 'Anotate' from project 'Anotate')
+
+SwiftCompile normal arm64 /Users/hyder/Documents/Projects/Anotate/Sources/Annotation.swift (in target 'Anotate' from project 'Anotate')
+    cd /Users/hyder/Documents/Projects/Anotate
+    
+
+SwiftDriverJobDiscovery normal arm64 Compiling Annotation.swift (in target 'Anotate' from project 'Anotate')
 
 SwiftDriverJobDiscovery normal arm64 Compiling AnnotationRenderer.swift (in target 'Anotate' from project 'Anotate')
 
-SwiftDriverJobDiscovery normal arm64 Compiling RoughPathGenerator.swift (in target 'Anotate' from project 'Anotate')
+SwiftDriverJobDiscovery normal arm64 Compiling AnnotationCanvasView.swift (in target 'Anotate' from project 'Anotate')
 
 SwiftDriver\ Compilation Anotate normal arm64 com.apple.xcode.tools.swift.compiler (in target 'Anotate' from project 'Anotate')
     cd /Users/hyder/Documents/Projects/Anotate
@@ -77,13 +88,13 @@ Copy /Users/hyder/Documents/Projects/Anotate/build/Build/Products/Debug/Anotate.
     cd /Users/hyder/Documents/Projects/Anotate
     builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -resolve-src-symlinks -rename /Users/hyder/Documents/Projects/Anotate/build/Build/Intermediates.noindex/Anotate.build/Debug/Anotate.build/Objects-normal/arm64/Anotate.abi.json /Users/hyder/Documents/Projects/Anotate/build/Build/Products/Debug/Anotate.swiftmodule/arm64-apple-macos.abi.json
 
-Copy /Users/hyder/Documents/Projects/Anotate/build/Build/Products/Debug/Anotate.swiftmodule/arm64-apple-macos.swiftmodule /Users/hyder/Documents/Projects/Anotate/build/Build/Intermediates.noindex/Anotate.build/Debug/Anotate.build/Objects-normal/arm64/Anotate.swiftmodule (in target 'Anotate' from project 'Anotate')
-    cd /Users/hyder/Documents/Projects/Anotate
-    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -resolve-src-symlinks -rename /Users/hyder/Documents/Projects/Anotate/build/Build/Intermediates.noindex/Anotate.build/Debug/Anotate.build/Objects-normal/arm64/Anotate.swiftmodule /Users/hyder/Documents/Projects/Anotate/build/Build/Products/Debug/Anotate.swiftmodule/arm64-apple-macos.swiftmodule
-
 Copy /Users/hyder/Documents/Projects/Anotate/build/Build/Products/Debug/Anotate.swiftmodule/Project/arm64-apple-macos.swiftsourceinfo /Users/hyder/Documents/Projects/Anotate/build/Build/Intermediates.noindex/Anotate.build/Debug/Anotate.build/Objects-normal/arm64/Anotate.swiftsourceinfo (in target 'Anotate' from project 'Anotate')
     cd /Users/hyder/Documents/Projects/Anotate
     builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -resolve-src-symlinks -rename /Users/hyder/Documents/Projects/Anotate/build/Build/Intermediates.noindex/Anotate.build/Debug/Anotate.build/Objects-normal/arm64/Anotate.swiftsourceinfo /Users/hyder/Documents/Projects/Anotate/build/Build/Products/Debug/Anotate.swiftmodule/Project/arm64-apple-macos.swiftsourceinfo
+
+Copy /Users/hyder/Documents/Projects/Anotate/build/Build/Products/Debug/Anotate.swiftmodule/arm64-apple-macos.swiftmodule /Users/hyder/Documents/Projects/Anotate/build/Build/Intermediates.noindex/Anotate.build/Debug/Anotate.build/Objects-normal/arm64/Anotate.swiftmodule (in target 'Anotate' from project 'Anotate')
+    cd /Users/hyder/Documents/Projects/Anotate
+    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -resolve-src-symlinks -rename /Users/hyder/Documents/Projects/Anotate/build/Build/Intermediates.noindex/Anotate.build/Debug/Anotate.build/Objects-normal/arm64/Anotate.swiftmodule /Users/hyder/Documents/Projects/Anotate/build/Build/Products/Debug/Anotate.swiftmodule/arm64-apple-macos.swiftmodule
 
 Ld /Users/hyder/Documents/Projects/Anotate/build/Build/Products/Debug/Anotate.app/Contents/MacOS/Anotate.debug.dylib normal (in target 'Anotate' from project 'Anotate')
     cd /Users/hyder/Documents/Projects/Anotate
@@ -101,8 +112,8 @@ Ld /Users/hyder/Documents/Projects/Anotate/build/Build/Products/Debug/Anotate.ap
 ExtractAppIntentsMetadata (in target 'Anotate' from project 'Anotate')
     cd /Users/hyder/Documents/Projects/Anotate
     /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/appintentsmetadataprocessor --toolchain-dir /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain --module-name Anotate --sdk-root /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.5.sdk --xcode-version 17F113 --platform-family macOS --deployment-target 13.0 --bundle-identifier com.example.Anotate --output /Users/hyder/Documents/Projects/Anotate/build/Build/Products/Debug/Anotate.app/Contents/Resources --target-triple arm64-apple-macos13.0 --binary-file /Users/hyder/Documents/Projects/Anotate/build/Build/Products/Debug/Anotate.app/Contents/MacOS/Anotate --dependency-file /Users/hyder/Documents/Projects/Anotate/build/Build/Intermediates.noindex/Anotate.build/Debug/Anotate.build/Objects-normal/arm64/Anotate_dependency_info.dat --stringsdata-file /Users/hyder/Documents/Projects/Anotate/build/Build/Intermediates.noindex/Anotate.build/Debug/Anotate.build/Objects-normal/arm64/ExtractedAppShortcutsMetadata.stringsdata --source-file-list /Users/hyder/Documents/Projects/Anotate/build/Build/Intermediates.noindex/Anotate.build/Debug/Anotate.build/Objects-normal/arm64/Anotate.SwiftFileList --metadata-file-list /Users/hyder/Documents/Projects/Anotate/build/Build/Intermediates.noindex/Anotate.build/Debug/Anotate.build/Anotate.DependencyMetadataFileList --static-metadata-file-list /Users/hyder/Documents/Projects/Anotate/build/Build/Intermediates.noindex/Anotate.build/Debug/Anotate.build/Anotate.DependencyStaticMetadataFileList --swift-const-vals-list /Users/hyder/Documents/Projects/Anotate/build/Build/Intermediates.noindex/Anotate.build/Debug/Anotate.build/Objects-normal/arm64/Anotate.SwiftConstValuesFileList --compile-time-extraction --deployment-aware-processing --validate-assistant-intents --no-app-shortcuts-localization
-2026-06-28 00:58:39.373 appintentsmetadataprocessor[20546:7859293] Starting appintentsmetadataprocessor export
-2026-06-28 00:58:39.374 appintentsmetadataprocessor[20546:7859293] warning: Metadata extraction skipped. No AppIntents.framework dependency found.
+2026-06-28 01:48:45.808 appintentsmetadataprocessor[21996:7914303] Starting appintentsmetadataprocessor export
+2026-06-28 01:48:45.809 appintentsmetadataprocessor[21996:7914303] warning: Metadata extraction skipped. No AppIntents.framework dependency found.
 
 CopySwiftLibs /Users/hyder/Documents/Projects/Anotate/build/Build/Products/Debug/Anotate.app (in target 'Anotate' from project 'Anotate')
     cd /Users/hyder/Documents/Projects/Anotate

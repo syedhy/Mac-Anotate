@@ -26,7 +26,6 @@ class RoughPathGenerator {
     
     static func generateDoodlePath(from annotation: Annotation, pass: Int) -> NSBezierPath {
         let path = NSBezierPath()
-        // Use a deterministic seed for the organic variations
         var random = SeededRandom(seed: annotation.roughnessSeed &+ UInt32(pass * 4200))
         
         switch annotation.type {
@@ -49,51 +48,46 @@ class RoughPathGenerator {
             
         case .arrow:
             guard let start = annotation.arrowStart, let end = annotation.arrowEnd else { return path }
-            let baseControl = annotation.arrowControlPoint ?? CGPoint(x: (start.x + end.x) / 2, y: (start.y + end.y) / 2)
-            
-            // Add a geometric bow based on seed, scaled by length
             let dx = end.x - start.x
             let dy = end.y - start.y
             let length = hypot(dx, dy)
+            if length < 1 { return path }
             
-            // If the user hasn't explicitly curved it, we apply the hand-drawn bow
             let isStraight = annotation.arrowControlPoint == nil
+            let baseControl = annotation.arrowControlPoint ?? CGPoint(x: (start.x + end.x) / 2, y: (start.y + end.y) / 2)
             var finalControl = baseControl
             
             if isStraight {
-                let dirX = dx / max(length, 1)
-                let dirY = dy / max(length, 1)
-                let bowAmount = random.nextFloat(in: -0.05...0.05) * length // Bow up to 5% of length
-                // Perpendicular offset
+                let dirX = length > 0 ? dx / length : 0.0
+                let dirY = length > 0 ? dy / length : 0.0
+                let bowAmount = random.nextFloat(in: -0.06...0.06) * length
                 finalControl = CGPoint(x: baseControl.x - dirY * bowAmount, y: baseControl.y + dirX * bowAmount)
             } else {
-                // For a manually curved arrow, just add a tiny pass-dependent variation
                 let varX = random.nextFloat(in: -0.01...0.01) * length
                 let varY = random.nextFloat(in: -0.01...0.01) * length
                 finalControl = CGPoint(x: baseControl.x + varX, y: baseControl.y + varY)
             }
             
+            let strokeW = annotation.dynamicArrowStrokeWidth
+            let headL = strokeW * 3.5
+            let headW = strokeW * 3.0
+            
             let dxCtrl = end.x - finalControl.x
             let dyCtrl = end.y - finalControl.y
             let angle = atan2(dyCtrl, dxCtrl)
             
-            let dynamicStrokeWidth = min(16.0, max(4.0, length / 30.0))
-            let headLength = dynamicStrokeWidth * 3.5
-            let headWidth = dynamicStrokeWidth * 3.0
+            // Shaft stops a bit BEFORE the arrowhead to make it float
+            let shaftEnd = CGPoint(x: end.x - headL * 1.2 * cos(angle), y: end.y - headL * 1.2 * sin(angle))
             
-            // The shaft should stop exactly at the back line of the arrowhead triangle
-            let shaftEnd = CGPoint(x: end.x - headLength * cos(angle), y: end.y - headLength * sin(angle))
+            path.move(to: start)
+            let cp1 = CGPoint(x: start.x + (2.0/3.0)*(finalControl.x - start.x), y: start.y + (2.0/3.0)*(finalControl.y - start.y))
+            let cp2 = CGPoint(x: shaftEnd.x + (2.0/3.0)*(finalControl.x - shaftEnd.x), y: shaftEnd.y + (2.0/3.0)*(finalControl.y - shaftEnd.y))
+            path.curve(to: shaftEnd, controlPoint1: cp1, controlPoint2: cp2)
             
-            if length > headLength {
-                path.move(to: start)
-                path.curve(to: shaftEnd, controlPoint1: finalControl, controlPoint2: finalControl)
-            }
-            
-            // Draw the hollow arrowhead triangle
-            let p1 = CGPoint(x: end.x - headLength * cos(angle) - headWidth/2 * sin(angle),
-                             y: end.y - headLength * sin(angle) + headWidth/2 * cos(angle))
-            let p2 = CGPoint(x: end.x - headLength * cos(angle) + headWidth/2 * sin(angle),
-                             y: end.y - headLength * sin(angle) - headWidth/2 * cos(angle))
+            let p1 = CGPoint(x: end.x - headL * cos(angle) - headW/2 * sin(angle),
+                             y: end.y - headL * sin(angle) + headW/2 * cos(angle))
+            let p2 = CGPoint(x: end.x - headL * cos(angle) + headW/2 * sin(angle),
+                             y: end.y - headL * sin(angle) - headW/2 * cos(angle))
             
             path.move(to: end)
             path.line(to: p1)
@@ -102,49 +96,14 @@ class RoughPathGenerator {
             
         case .rectangle:
             guard let rect = annotation.rect else { return path }
-            let tl = CGPoint(x: rect.minX, y: rect.maxY)
-            let tr = CGPoint(x: rect.maxX, y: rect.maxY)
-            let br = CGPoint(x: rect.maxX, y: rect.minY)
-            let bl = CGPoint(x: rect.minX, y: rect.minY)
-            
-            drawRoughLine(on: path, from: tl, to: tr, random: &random, bowDirection: 1) // Top edge bows out (or in depending on seed sign, but biased)
-            drawRoughLine(on: path, from: tr, to: br, random: &random, bowDirection: 1) // Right edge bows out
-            drawRoughLine(on: path, from: br, to: bl, random: &random, bowDirection: -1) // Bottom edge bows in
-            drawRoughLine(on: path, from: bl, to: tl, random: &random, bowDirection: -1) // Left edge bows in
+            let w = rect.width
+            let h = rect.height
+            let r = min(16, min(w, h) * 0.25)
+            path.appendRoundedRect(rect, xRadius: r, yRadius: r)
             
         case .oval:
             guard let rect = annotation.rect else { return path }
-            let kappa: CGFloat = 0.5522848
-            let w = rect.width
-            let h = rect.height
-            let ox = (w / 2) * kappa
-            let oy = (h / 2) * kappa
-            let xe = rect.maxX
-            let ye = rect.maxY
-            let xm = rect.midX
-            let ym = rect.midY
-            
-            // Perturb the control points slightly based on size
-            func p(_ val: CGFloat, maxScale: CGFloat) -> CGFloat {
-                return val + random.nextFloat(in: -maxScale...maxScale)
-            }
-            
-            let scaleX = w * 0.03
-            let scaleY = h * 0.03
-            
-            path.move(to: CGPoint(x: rect.minX, y: ym))
-            path.curve(to: CGPoint(x: xm, y: ye), 
-                       controlPoint1: CGPoint(x: rect.minX, y: p(ym + oy, maxScale: scaleY)),
-                       controlPoint2: CGPoint(x: p(xm - ox, maxScale: scaleX), y: ye))
-            path.curve(to: CGPoint(x: xe, y: ym), 
-                       controlPoint1: CGPoint(x: p(xm + ox, maxScale: scaleX), y: ye),
-                       controlPoint2: CGPoint(x: xe, y: p(ym + oy, maxScale: scaleY)))
-            path.curve(to: CGPoint(x: xm, y: rect.minY), 
-                       controlPoint1: CGPoint(x: xe, y: p(ym - oy, maxScale: scaleY)),
-                       controlPoint2: CGPoint(x: p(xm + ox, maxScale: scaleX), y: rect.minY))
-            path.curve(to: CGPoint(x: rect.minX, y: ym), 
-                       controlPoint1: CGPoint(x: p(xm - ox, maxScale: scaleX), y: rect.minY),
-                       controlPoint2: CGPoint(x: rect.minX, y: p(ym - oy, maxScale: scaleY)))
+            path.appendOval(in: rect)
             
         case .text, .select:
             break
@@ -153,30 +112,139 @@ class RoughPathGenerator {
         return path
     }
     
-
-    
-    private static func drawRoughLine(on path: NSBezierPath, from start: CGPoint, to end: CGPoint, random: inout SeededRandom, bowDirection: CGFloat) {
-        let dx = end.x - start.x
-        let dy = end.y - start.y
-        let length = hypot(dx, dy)
+    private static func addVariableWidthLine(to path: NSBezierPath, from start: CGPoint, to end: CGPoint, control: CGPoint?, wStart: CGFloat, wMid: CGFloat, wEnd: CGFloat, roundCapStart: Bool, roundCapEnd: Bool) {
+        let steps = 30
+        var leftPoints: [CGPoint] = []
+        var rightPoints: [CGPoint] = []
+        var tangents: [CGPoint] = []
         
-        if length == 0 {
-            path.move(to: start)
-            path.line(to: end)
-            return
+        for i in 0...steps {
+            let t = CGFloat(i) / CGFloat(steps)
+            let oneMinusT = 1.0 - t
+            
+            let w = wStart * oneMinusT * oneMinusT + wMid * 2 * t * oneMinusT + wEnd * t * t
+            let halfW = w / 2.0
+            
+            let pt: CGPoint
+            let tangent: CGPoint
+            if let c = control {
+                pt = CGPoint(
+                    x: oneMinusT * oneMinusT * start.x + 2 * oneMinusT * t * c.x + t * t * end.x,
+                    y: oneMinusT * oneMinusT * start.y + 2 * oneMinusT * t * c.y + t * t * end.y
+                )
+                tangent = CGPoint(
+                    x: 2 * oneMinusT * (c.x - start.x) + 2 * t * (end.x - c.x),
+                    y: 2 * oneMinusT * (c.y - start.y) + 2 * t * (end.y - c.y)
+                )
+            } else {
+                pt = CGPoint(
+                    x: start.x + t * (end.x - start.x),
+                    y: start.y + t * (end.y - start.y)
+                )
+                tangent = CGPoint(x: end.x - start.x, y: end.y - start.y)
+            }
+            
+            let length = hypot(tangent.x, tangent.y)
+            let nTangent = length > 0.001 ? CGPoint(x: tangent.x / length, y: tangent.y / length) : CGPoint(x: 1, y: 0)
+            tangents.append(nTangent)
+            
+            let normal = CGPoint(x: -nTangent.y, y: nTangent.x)
+            
+            leftPoints.append(CGPoint(x: pt.x + normal.x * halfW, y: pt.y + normal.y * halfW))
+            rightPoints.append(CGPoint(x: pt.x - normal.x * halfW, y: pt.y - normal.y * halfW))
         }
         
-        path.move(to: start)
+        path.move(to: rightPoints[0])
         
-        let midX = (start.x + end.x) / 2
-        let midY = (start.y + end.y) / 2
-        let dirX = dx / length
-        let dirY = dy / length
+        if roundCapStart {
+            let r = wStart / 2.0
+            let t0 = tangents[0]
+            let fX = -t0.x
+            let fY = -t0.y
+            let pRight = rightPoints[0]
+            let pLeft = leftPoints[0]
+            
+            path.curve(to: pLeft, 
+                       controlPoint1: CGPoint(x: pRight.x + fX * r * 1.3, y: pRight.y + fY * r * 1.3), 
+                       controlPoint2: CGPoint(x: pLeft.x + fX * r * 1.3, y: pLeft.y + fY * r * 1.3))
+        } else {
+            path.line(to: leftPoints[0])
+        }
         
-        // Scale bowing by length (e.g. 2% to 4% of line length)
-        let bowAmount = random.nextFloat(in: 0.02...0.04) * length * bowDirection
-        let ctrl = CGPoint(x: midX - dirY * bowAmount, y: midY + dirX * bowAmount)
+        for i in 1...steps {
+            path.line(to: leftPoints[i])
+        }
         
-        path.curve(to: end, controlPoint1: ctrl, controlPoint2: ctrl)
+        if roundCapEnd {
+            let r = wEnd / 2.0
+            let tE = tangents[steps]
+            let fX = tE.x
+            let fY = tE.y
+            let pLeft = leftPoints[steps]
+            let pRight = rightPoints[steps]
+            
+            path.curve(to: pRight, 
+                       controlPoint1: CGPoint(x: pLeft.x + fX * r * 1.3, y: pLeft.y + fY * r * 1.3), 
+                       controlPoint2: CGPoint(x: pRight.x + fX * r * 1.3, y: pRight.y + fY * r * 1.3))
+        } else {
+            path.line(to: rightPoints[steps])
+        }
+        
+        for i in (0..<steps).reversed() {
+            path.line(to: rightPoints[i])
+        }
+        
+        path.close()
+    }
+    
+    private static func addVariableWidthContinuousCubic(to path: NSBezierPath, points: [CGPoint], controls1: [CGPoint], controls2: [CGPoint], widths: [CGFloat]) {
+        let stepsPerCurve = 20
+        var leftPoints: [CGPoint] = []
+        var rightPoints: [CGPoint] = []
+        
+        for curveIdx in 0..<points.count {
+            let p0 = points[curveIdx]
+            let p1 = points[(curveIdx + 1) % points.count]
+            let c1 = controls1[curveIdx]
+            let c2 = controls2[curveIdx]
+            let w0 = widths[curveIdx]
+            let w1 = widths[(curveIdx + 1) % widths.count]
+            
+            for i in 0..<stepsPerCurve {
+                let t = CGFloat(i) / CGFloat(stepsPerCurve)
+                let oneMinusT = 1.0 - t
+                
+                let w = w0 * (1 - t) + w1 * t
+                let halfW = w / 2.0
+                
+                let pt = CGPoint(
+                    x: oneMinusT * oneMinusT * oneMinusT * p0.x + 3 * oneMinusT * oneMinusT * t * c1.x + 3 * oneMinusT * t * t * c2.x + t * t * t * p1.x,
+                    y: oneMinusT * oneMinusT * oneMinusT * p0.y + 3 * oneMinusT * oneMinusT * t * c1.y + 3 * oneMinusT * t * t * c2.y + t * t * t * p1.y
+                )
+                let tangent = CGPoint(
+                    x: 3 * oneMinusT * oneMinusT * (c1.x - p0.x) + 6 * oneMinusT * t * (c2.x - c1.x) + 3 * t * t * (p1.x - c2.x),
+                    y: 3 * oneMinusT * oneMinusT * (c1.y - p0.y) + 6 * oneMinusT * t * (c2.y - c1.y) + 3 * t * t * (p1.y - c2.y)
+                )
+                
+                let length = hypot(tangent.x, tangent.y)
+                let nTangent = length > 0.001 ? CGPoint(x: tangent.x / length, y: tangent.y / length) : CGPoint(x: 1, y: 0)
+                let normal = CGPoint(x: -nTangent.y, y: nTangent.x)
+                
+                leftPoints.append(CGPoint(x: pt.x + normal.x * halfW, y: pt.y + normal.y * halfW))
+                rightPoints.append(CGPoint(x: pt.x - normal.x * halfW, y: pt.y - normal.y * halfW))
+            }
+        }
+        
+        if leftPoints.isEmpty { return }
+        
+        path.move(to: leftPoints[0])
+        for i in 1..<leftPoints.count {
+            path.line(to: leftPoints[i])
+        }
+        path.line(to: rightPoints.last!) 
+        for i in (0..<rightPoints.count).reversed() {
+            path.line(to: rightPoints[i])
+        }
+        path.close()
     }
 }

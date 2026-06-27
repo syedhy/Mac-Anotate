@@ -6,15 +6,13 @@ class AnnotationRenderer {
         let now = Date()
         
         for annotation in annotations {
-            // Check laser expiration
             if let expiresAt = annotation.expiresAt {
                 if now > expiresAt {
                     continue
                 }
                 
-                // Fade out laser stroke based on time remaining
                 let timeLeft = expiresAt.timeIntervalSince(now)
-                let alpha = max(0, min(1.0, CGFloat(timeLeft / 0.5))) // Fade out over the last 0.5 second
+                let alpha = max(0, min(1.0, CGFloat(timeLeft / 0.5)))
                 
                 let fadedColor = annotation.color.withAlphaComponent(alpha)
                 drawAnnotation(annotation, color: fadedColor, in: context)
@@ -29,9 +27,6 @@ class AnnotationRenderer {
         let nsContext = NSGraphicsContext(cgContext: context, flipped: false)
         NSGraphicsContext.current = nsContext
         
-        color.setStroke()
-        color.setFill()
-        
         // Add subtle shadow
         let shadow = NSShadow()
         shadow.shadowColor = NSColor.black.withAlphaComponent(0.3)
@@ -43,45 +38,39 @@ class AnnotationRenderer {
             if let text = annotation.text, let rect = annotation.textRect {
                 drawText(text, in: rect, color: color, fontSize: annotation.fontSize)
             }
-        } else {
-            
-            // Pass 0: Full opacity
+        } else if annotation.type == .pen || annotation.type == .laser {
             let path1 = RoughPathGenerator.generateDoodlePath(from: annotation, pass: 0)
+            path1.lineWidth = annotation.strokeWidth
+            path1.lineCapStyle = .round
+            path1.lineJoinStyle = .round
+            color.setStroke()
+            path1.stroke()
+        } else {
+            // Pass 0: Main filled shape
+            let path1 = RoughPathGenerator.generateDoodlePath(from: annotation, pass: 0)
+            color.setFill()
+            path1.fill()
             
-            // Dynamic stroke width based on length
-            if annotation.type == .arrow, let s = annotation.arrowStart, let e = annotation.arrowEnd {
-                let length = hypot(e.x - s.x, e.y - s.y)
-                let dynamicWidth = min(16.0, max(4.0, length / 30.0))
-                path1.lineWidth = dynamicWidth
-            } else {
-                path1.lineWidth = annotation.strokeWidth
-            }
-            
+            // Soft rounded edges via a thin stroke
+            path1.lineWidth = 1.5
             path1.lineCapStyle = .round
             path1.lineJoinStyle = .round
             color.setStroke()
             path1.stroke()
             
-            // Pass 1: Lower opacity (for double stroke effect on shapes)
-            if annotation.type != .pen && annotation.type != .laser {
-                let path2 = RoughPathGenerator.generateDoodlePath(from: annotation, pass: 1)
-                
-                if annotation.type == .arrow, let s = annotation.arrowStart, let e = annotation.arrowEnd {
-                    let length = hypot(e.x - s.x, e.y - s.y)
-                    let dynamicWidth = min(16.0, max(4.0, length / 30.0))
-                    path2.lineWidth = dynamicWidth
-                } else {
-                    path2.lineWidth = annotation.strokeWidth
-                }
-                
-                path2.lineCapStyle = .round
-                path2.lineJoinStyle = .round
-                color.withAlphaComponent(0.65).setStroke()
-                path2.stroke()
-            }
+            // Pass 1: Soft offset shape for double-stroke effect
+            let path2 = RoughPathGenerator.generateDoodlePath(from: annotation, pass: 1)
+            let softColor = color.withAlphaComponent(0.35)
+            softColor.setFill()
+            path2.fill()
+            
+            path2.lineWidth = 1.5
+            path2.lineCapStyle = .round
+            path2.lineJoinStyle = .round
+            softColor.setStroke()
+            path2.stroke()
         }
         
-        // Draw selection handles
         if SelectionManager.shared.selectedAnnotationID == annotation.id {
             if let handles = AnnotationHitTester.getHandles(for: annotation) {
                 NSColor.white.setFill()

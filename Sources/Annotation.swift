@@ -36,4 +36,10 @@ struct Annotation: Identifiable {
             self.expiresAt = Date().addingTimeInterval(1.5) // Fades after 1.5 seconds
         }
     }
+    
+    var dynamicArrowStrokeWidth: CGFloat {
+        guard type == .arrow, let start = arrowStart, let end = arrowEnd else { return strokeWidth }
+        let length = hypot(end.x - start.x, end.y - start.y)
+        return min(16.0, max(2.0, length / 30.0))
+    }
 }

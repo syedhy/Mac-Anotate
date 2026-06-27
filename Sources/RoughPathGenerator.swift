@@ -68,7 +68,7 @@ class RoughPathGenerator {
                 finalControl = CGPoint(x: baseControl.x + varX, y: baseControl.y + varY)
             }
             
-            let strokeW = annotation.strokeWidth
+            let strokeW = annotation.dynamicArrowStrokeWidth
             let headL = strokeW * 3.5
             let headW = strokeW * 3.0
             

@@ -111,7 +111,7 @@ struct AnnotationHitTester {
             let dx = end.x - start.x
             let dy = end.y - start.y
             let length = hypot(dx, dy)
-            let strokeW = annotation.strokeWidth
+            let strokeW = annotation.dynamicArrowStrokeWidth
             let headL = strokeW * 3.5
             let dxCtrl = end.x - control.x
             let dyCtrl = end.y - control.y

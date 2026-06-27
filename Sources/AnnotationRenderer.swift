@@ -40,7 +40,7 @@ class AnnotationRenderer {
             }
         } else if annotation.type == .pen || annotation.type == .laser || annotation.type == .rectangle || annotation.type == .oval || annotation.type == .arrow {
             let path1 = RoughPathGenerator.generateDoodlePath(from: annotation, pass: 0)
-            path1.lineWidth = annotation.strokeWidth
+            path1.lineWidth = annotation.type == .arrow ? annotation.dynamicArrowStrokeWidth : annotation.strokeWidth
             path1.lineCapStyle = .round
             path1.lineJoinStyle = .round
             color.setStroke()

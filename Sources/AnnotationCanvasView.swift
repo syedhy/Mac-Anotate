@@ -271,6 +271,8 @@ class AnnotationCanvasView: NSView, NSTextFieldDelegate {
                 } else if handleIndex == 2 {
                     resized.arrowEnd = CGPoint(x: resized.arrowEnd!.x + dx, y: resized.arrowEnd!.y + dy)
                 }
+            } else if resized.type == .pen || resized.type == .laser {
+                resized.points = resized.points.map { CGPoint(x: $0.x + dx, y: $0.y + dy) }
             } else if resized.type == .rectangle || resized.type == .oval || resized.type == .text {
                 let r: CGRect
                 if resized.type == .text {

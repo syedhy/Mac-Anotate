@@ -32,9 +32,19 @@ struct AnnotationHitTester {
             }
         case .arrow:
             guard let start = annotation.arrowStart, let end = annotation.arrowEnd else { return .none }
-            // Distance to line segment
-            let dist = distanceToSegment(p: point, a: start, b: end)
-            if dist < hitTolerance { return .body }
+            let control = annotation.arrowControlPoint ?? CGPoint(x: (start.x + end.x) / 2, y: (start.y + end.y) / 2)
+            
+            // Sample distance to quadratic bezier curve
+            var minDistance: CGFloat = .infinity
+            let steps = 20
+            for i in 0...steps {
+                let t = CGFloat(i) / CGFloat(steps)
+                let x = pow(1 - t, 2) * start.x + 2 * (1 - t) * t * control.x + pow(t, 2) * end.x
+                let y = pow(1 - t, 2) * start.y + 2 * (1 - t) * t * control.y + pow(t, 2) * end.y
+                let d = point.distance(to: CGPoint(x: x, y: y))
+                if d < minDistance { minDistance = d }
+            }
+            if minDistance < hitTolerance { return .body }
         case .rectangle, .oval:
             guard let rect = annotation.rect else { return .none }
             // Check if inside or on edge (just inside for now)

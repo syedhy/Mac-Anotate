@@ -66,14 +66,25 @@ class AnnotationCanvasView: NSView, NSTextFieldDelegate {
     override func keyDown(with event: NSEvent) {
         guard let characters = event.characters else { return }
         
-        // Esc cancels and closes
+        // Esc cancels drawing or switches to select
         if event.keyCode == 53 {
-            // Cancel current action if any
             if currentAnnotation != nil {
+                // Cancel current drawing
                 currentAnnotation = nil
                 needsDisplay = true
+            } else if ToolManager.shared.activeTool != .select {
+                // Switch to select tool and select the last drawn annotation
+                ToolManager.shared.activeTool = .select
+                if let last = annotations.last, last.type != .laser, last.type != .pen {
+                    SelectionManager.shared.selectedAnnotationID = last.id
+                }
+                needsDisplay = true
+            } else if SelectionManager.shared.selectedAnnotationID != nil {
+                // Clear selection
+                SelectionManager.shared.clearSelection()
+                needsDisplay = true
             } else {
-                // Let the overlay controller handle exit
+                // Toggle overlay if already in select mode with no selection
                 (window?.windowController as? OverlayWindowController)?.toggleOverlay()
             }
             return

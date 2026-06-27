@@ -84,14 +84,12 @@ class RoughPathGenerator {
             let xm = rect.midX
             let ym = rect.midY
             
-            let wAmount: CGFloat = 2.0
-            func w() -> CGFloat { return random.nextFloat(in: -wAmount...wAmount) }
-            
-            path.move(to: CGPoint(x: rect.minX + w(), y: ym + w()))
-            path.curve(to: CGPoint(x: xm + w(), y: ye + w()), controlPoint1: CGPoint(x: rect.minX + w(), y: ym + oy + w()), controlPoint2: CGPoint(x: xm - ox + w(), y: ye + w()))
-            path.curve(to: CGPoint(x: xe + w(), y: ym + w()), controlPoint1: CGPoint(x: xm + ox + w(), y: ye + w()), controlPoint2: CGPoint(x: xe + w(), y: ym + oy + w()))
-            path.curve(to: CGPoint(x: xm + w(), y: rect.minY + w()), controlPoint1: CGPoint(x: xe + w(), y: ym - oy + w()), controlPoint2: CGPoint(x: xm + ox + w(), y: rect.minY + w()))
-            path.curve(to: CGPoint(x: rect.minX + w(), y: ym + w()), controlPoint1: CGPoint(x: xm - ox + w(), y: rect.minY + w()), controlPoint2: CGPoint(x: rect.minX + w(), y: ym - oy + w()))
+            // Clean paths without small randomized offsets
+            path.move(to: CGPoint(x: rect.minX, y: ym))
+            path.curve(to: CGPoint(x: xm, y: ye), controlPoint1: CGPoint(x: rect.minX, y: ym + oy), controlPoint2: CGPoint(x: xm - ox, y: ye))
+            path.curve(to: CGPoint(x: xe, y: ym), controlPoint1: CGPoint(x: xm + ox, y: ye), controlPoint2: CGPoint(x: xe, y: ym + oy))
+            path.curve(to: CGPoint(x: xm, y: rect.minY), controlPoint1: CGPoint(x: xe, y: ym - oy), controlPoint2: CGPoint(x: xm + ox, y: rect.minY))
+            path.curve(to: CGPoint(x: rect.minX, y: ym), controlPoint1: CGPoint(x: xm - ox, y: rect.minY), controlPoint2: CGPoint(x: rect.minX, y: ym - oy))
             
         case .text, .select:
             break
@@ -106,13 +104,16 @@ class RoughPathGenerator {
         
         let control = annotation.arrowControlPoint ?? CGPoint(x: (start.x + end.x) / 2, y: (start.y + end.y) / 2)
         
-        // Derivative of quadratic bezier at t=1 is 2*(end - control)
         let dx = end.x - control.x
         let dy = end.y - control.y
         let angle = atan2(dy, dx)
         
-        let length = annotation.strokeWidth * 4.0
-        let width = annotation.strokeWidth * 3.0
+        // Dynamic arrowhead size based on length
+        let arrowLength = hypot(end.x - start.x, end.y - start.y)
+        let dynamicStrokeWidth = min(16.0, max(4.0, arrowLength / 30.0))
+        
+        let length = dynamicStrokeWidth * 3.5
+        let width = dynamicStrokeWidth * 3.0
         
         let p1 = CGPoint(x: end.x - length * cos(angle) - width/2 * sin(angle),
                          y: end.y - length * sin(angle) + width/2 * cos(angle))
@@ -138,21 +139,16 @@ class RoughPathGenerator {
             return
         }
         
-        // Slight offset
-        let offset: CGFloat = 2.0
-        let newStart = CGPoint(x: start.x + random.nextFloat(in: -offset...offset), y: start.y + random.nextFloat(in: -offset...offset))
-        let newEnd = CGPoint(x: end.x + random.nextFloat(in: -offset...offset), y: end.y + random.nextFloat(in: -offset...offset))
+        path.move(to: start)
         
-        path.move(to: newStart)
-        
-        // Slight bow
+        // Very subtle bow for hand-drawn feel, but no random jitter offsets
         let midX = (start.x + end.x) / 2
         let midY = (start.y + end.y) / 2
         let dirX = dx / length
         let dirY = dy / length
-        let bowAmount = random.nextFloat(in: -2.0...2.0)
+        let bowAmount = random.nextFloat(in: -1.0...1.0)
         let ctrl = CGPoint(x: midX - dirY * bowAmount, y: midY + dirX * bowAmount)
         
-        path.curve(to: newEnd, controlPoint1: ctrl, controlPoint2: ctrl)
+        path.curve(to: end, controlPoint1: ctrl, controlPoint2: ctrl)
     }
 }

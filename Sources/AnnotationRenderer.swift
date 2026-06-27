@@ -14,7 +14,7 @@ class AnnotationRenderer {
                 
                 // Fade out laser stroke based on time remaining
                 let timeLeft = expiresAt.timeIntervalSince(now)
-                let alpha = max(0, min(1.0, CGFloat(timeLeft / 1.0))) // Fade out over the last second
+                let alpha = max(0, min(1.0, CGFloat(timeLeft / 0.5))) // Fade out over the last 0.5 second
                 
                 let fadedColor = annotation.color.withAlphaComponent(alpha)
                 drawAnnotation(annotation, color: fadedColor, in: context)
@@ -51,23 +51,23 @@ class AnnotationRenderer {
                 arrowPath.fill()
             }
             
-            // Pass 1: Full opacity
-            let path1 = RoughPathGenerator.generateDoodlePath(from: annotation, pass: 0)
-            path1.lineWidth = annotation.strokeWidth
-            path1.lineCapStyle = .round
-            path1.lineJoinStyle = .round
-            color.setStroke()
-            path1.stroke()
+            // Single clean solid pass to prevent weird overlaps
+            let path = RoughPathGenerator.generateDoodlePath(from: annotation, pass: 0)
             
-            // Pass 2: Lower opacity
-            if annotation.type != .pen && annotation.type != .laser {
-                let path2 = RoughPathGenerator.generateDoodlePath(from: annotation, pass: 1)
-                path2.lineWidth = annotation.strokeWidth
-                path2.lineCapStyle = .round
-                path2.lineJoinStyle = .round
-                color.withAlphaComponent(0.65).setStroke()
-                path2.stroke()
+            // For arrows, dynamic stroke width based on length
+            if annotation.type == .arrow, let s = annotation.arrowStart, let e = annotation.arrowEnd {
+                let length = hypot(e.x - s.x, e.y - s.y)
+                // Base thickness 4, scales up to 16 based on length (max at ~500 points)
+                let dynamicWidth = min(16.0, max(4.0, length / 30.0))
+                path.lineWidth = dynamicWidth
+            } else {
+                path.lineWidth = annotation.strokeWidth
             }
+            
+            path.lineCapStyle = .round
+            path.lineJoinStyle = .round
+            color.setStroke()
+            path.stroke()
         }
         
         // Draw selection handles

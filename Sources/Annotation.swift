@@ -33,7 +33,7 @@ struct Annotation: Identifiable {
         self.createdAt = Date()
         
         if type == .laser {
-            self.expiresAt = Date().addingTimeInterval(3.0) // Fades after 3 seconds
+            self.expiresAt = Date().addingTimeInterval(1.5) // Fades after 1.5 seconds
         }
     }
 }

@@ -91,12 +91,31 @@ struct FloatingToolbarView: View {
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
         .background(
-            RoundedRectangle(cornerRadius: 30)
-                .fill(Color(NSColor.windowBackgroundColor).opacity(0.8))
-                .shadow(color: Color.black.opacity(0.2), radius: 10, x: 0, y: 5)
+            VisualEffectView(material: .popover, blendingMode: .behindWindow)
+                .clipShape(RoundedRectangle(cornerRadius: 30))
+                .shadow(color: Color.black.opacity(0.15), radius: 10, x: 0, y: 5)
         )
         // Ensure SwiftUI handles mouse clicks properly on the Mac transparent window
         .onHover { _ in NSCursor.arrow.push() }
+    }
+}
+
+// Helper to use NSVisualEffectView in SwiftUI
+struct VisualEffectView: NSViewRepresentable {
+    var material: NSVisualEffectView.Material
+    var blendingMode: NSVisualEffectView.BlendingMode
+    
+    func makeNSView(context: Context) -> NSVisualEffectView {
+        let view = NSVisualEffectView()
+        view.material = material
+        view.blendingMode = blendingMode
+        view.state = .active
+        return view
+    }
+    
+    func updateNSView(_ nsView: NSVisualEffectView, context: Context) {
+        nsView.material = material
+        nsView.blendingMode = blendingMode
     }
 }
 

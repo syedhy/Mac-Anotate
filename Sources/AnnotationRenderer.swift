@@ -106,23 +106,8 @@ class AnnotationRenderer {
         NSGraphicsContext.restoreGraphicsState()
     }
     
-    private static var roundedFontDescriptor: NSFontDescriptor? = {
-        if #available(macOS 11.0, *) {
-            return NSFontDescriptor.preferredFontDescriptor(forTextStyle: .body)
-                .withDesign(.rounded)?
-                .withSymbolicTraits(.bold)
-        }
-        return nil
-    }()
-    
     private static func drawText(_ text: String, in rect: CGRect, color: NSColor, fontSize: CGFloat) {
-        var font = NSFont.systemFont(ofSize: fontSize, weight: .bold)
-        
-        if let desc = roundedFontDescriptor, let roundedFont = NSFont(descriptor: desc, size: fontSize) {
-            font = roundedFont
-        } else if let sfPro = NSFont(name: "SFProRounded-Bold", size: fontSize) {
-            font = sfPro
-        }
+        let font = NSFont(name: "Marker Felt", size: fontSize) ?? NSFont.systemFont(ofSize: fontSize, weight: .bold)
         
         let paragraphStyle = NSMutableParagraphStyle()
         paragraphStyle.lineBreakMode = .byWordWrapping

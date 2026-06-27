@@ -189,6 +189,10 @@ class AnnotationCanvasView: NSView, NSTextFieldDelegate {
                     interactionState = .resizingSelection(handleIndex: idx, startPoint: point, originalAnnotation: annotations[index])
                     return
                 case .body:
+                    if event.clickCount == 2 && annotations[index].type == .text {
+                        startTextEditing(existingAnnotation: annotations[index], at: index)
+                        return
+                    }
                     interactionState = .movingSelection(startPoint: point, originalAnnotation: annotations[index])
                     return
                 case .none:
@@ -197,8 +201,12 @@ class AnnotationCanvasView: NSView, NSTextFieldDelegate {
             }
             
             // Otherwise, see if we hit another annotation body
-            for annotation in annotations.reversed() {
+            for (index, annotation) in annotations.enumerated().reversed() {
                 if AnnotationHitTester.hitTest(point: point, annotation: annotation) != .none {
+                    if event.clickCount == 2 && annotation.type == .text {
+                        startTextEditing(existingAnnotation: annotation, at: index)
+                        return
+                    }
                     SelectionManager.shared.selectedAnnotationID = annotation.id
                     interactionState = .movingSelection(startPoint: point, originalAnnotation: annotation)
                     needsDisplay = true
@@ -300,7 +308,26 @@ class AnnotationCanvasView: NSView, NSTextFieldDelegate {
                     resized.arrowEnd = CGPoint(x: resized.arrowEnd!.x + dx, y: resized.arrowEnd!.y + dy)
                 }
             } else if resized.type == .pen || resized.type == .laser {
-                resized.points = resized.points.map { CGPoint(x: $0.x + dx, y: $0.y + dy) }
+                if let handles = AnnotationHitTester.getHandles(for: originalAnnotation) {
+                    let oppositeIndex = 3 - handleIndex
+                    let anchor = handles[oppositeIndex]
+                    let currentHandle = handles[handleIndex]
+                    
+                    let newHandle = CGPoint(x: currentHandle.x + dx, y: currentHandle.y + dy)
+                    let origW = abs(currentHandle.x - anchor.x)
+                    let origH = abs(currentHandle.y - anchor.y)
+                    
+                    if origW > 1.0 && origH > 1.0 {
+                        let newW = abs(newHandle.x - anchor.x)
+                        let newH = abs(newHandle.y - anchor.y)
+                        let scale = max(0.1, max(newW / origW, newH / origH))
+                        
+                        resized.points = originalAnnotation.points.map { p in
+                            return CGPoint(x: anchor.x + (p.x - anchor.x) * scale,
+                                           y: anchor.y + (p.y - anchor.y) * scale)
+                        }
+                    }
+                }
             } else if resized.type == .rectangle || resized.type == .oval || resized.type == .text {
                 let r: CGRect
                 if resized.type == .text {
@@ -326,8 +353,10 @@ class AnnotationCanvasView: NSView, NSTextFieldDelegate {
                     maxX += dx; maxY += dy
                 }
                 
-                // Keep valid rect
-                let newRect = CGRect(x: min(minX, maxX), y: min(minY, maxY), width: abs(maxX - minX), height: abs(maxY - minY))
+                // Keep valid rect with minimum size constraints
+                let width = max(20.0, abs(maxX - minX))
+                let height = max(20.0, abs(maxY - minY))
+                let newRect = CGRect(x: min(minX, maxX), y: min(minY, maxY), width: width, height: height)
                 if resized.type == .text {
                     resized.textRect = newRect
                 } else {
@@ -439,16 +468,22 @@ class AnnotationCanvasView: NSView, NSTextFieldDelegate {
         textField.isBordered = false
         textField.drawsBackground = false
         textField.focusRingType = .none
-        textField.font = NSFont.systemFont(ofSize: 24, weight: .bold)
+        textField.font = NSFont(name: "Marker Felt", size: 28) ?? NSFont.systemFont(ofSize: 24, weight: .bold)
         textField.textColor = SettingsStore.shared.lastSelectedColor
         textField.isEditable = true
         textField.isSelectable = true
+        textField.usesSingleLineMode = false
+        textField.cell?.wraps = false
+        textField.cell?.isScrollable = true
     }
     
     func control(_ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
         if commandSelector == #selector(NSResponder.cancelOperation(_:)) {
             // Escape key finishes editing
             self.window?.makeFirstResponder(self)
+            return true
+        } else if commandSelector == #selector(NSResponder.insertNewline(_:)) {
+            textView.insertNewlineIgnoringFieldEditor(self)
             return true
         }
         return false
@@ -459,7 +494,7 @@ class AnnotationCanvasView: NSView, NSTextFieldDelegate {
         let text = textField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
         
         if !text.isEmpty {
-            let font = textField.font ?? NSFont.systemFont(ofSize: 24, weight: .bold)
+            let font = textField.font ?? NSFont(name: "Marker Felt", size: 28) ?? NSFont.systemFont(ofSize: 24, weight: .bold)
             let attributes: [NSAttributedString.Key: Any] = [.font: font]
             let size = (text as NSString).size(withAttributes: attributes)
             let rect = CGRect(origin: textField.frame.origin, size: size)

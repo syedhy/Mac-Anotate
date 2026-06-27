@@ -15,10 +15,16 @@ class OverlayWindowController: NSWindowController, NSWindowDelegate {
     var isOverlayActive: Bool = false
     
     init() {
-        let screenRect = NSScreen.main?.frame ?? NSRect(x: 0, y: 0, width: 800, height: 600)
+        let screenFrame = NSScreen.main?.frame ?? NSRect(x: 0, y: 0, width: 800, height: 600)
+        let visibleFrame = NSScreen.main?.visibleFrame ?? screenFrame
+        
+        // Exclude the menu bar (which is at the top)
+        let menuBarHeight = screenFrame.maxY - visibleFrame.maxY
+        var overlayFrame = screenFrame
+        overlayFrame.size.height -= menuBarHeight
         
         let overlayWindow = OverlayWindow(
-            contentRect: screenRect,
+            contentRect: overlayFrame,
             styleMask: [.borderless],
             backing: .buffered,
             defer: false

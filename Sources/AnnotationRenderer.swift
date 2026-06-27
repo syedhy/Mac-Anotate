@@ -14,7 +14,7 @@ class AnnotationRenderer {
                 
                 // Fade out laser stroke based on time remaining
                 let timeLeft = expiresAt.timeIntervalSince(now)
-                let alpha = max(0, min(1.0, CGFloat(timeLeft / 1.0))) // Fade out over the last second
+                let alpha = max(0, min(1.0, CGFloat(timeLeft / 0.5))) // Fade out over the last 0.5 second
                 
                 let fadedColor = annotation.color.withAlphaComponent(alpha)
                 drawAnnotation(annotation, color: fadedColor, in: context)
@@ -44,25 +44,36 @@ class AnnotationRenderer {
                 drawText(text, in: rect, color: color, fontSize: annotation.fontSize)
             }
         } else {
-            // Draw arrowhead if needed
-            if annotation.type == .arrow {
-                let arrowPath = RoughPathGenerator.generateArrowhead(from: annotation)
-                color.setFill()
-                arrowPath.fill()
+            
+            // Pass 0: Full opacity
+            let path1 = RoughPathGenerator.generateDoodlePath(from: annotation, pass: 0)
+            
+            // Dynamic stroke width based on length
+            if annotation.type == .arrow, let s = annotation.arrowStart, let e = annotation.arrowEnd {
+                let length = hypot(e.x - s.x, e.y - s.y)
+                let dynamicWidth = min(16.0, max(4.0, length / 30.0))
+                path1.lineWidth = dynamicWidth
+            } else {
+                path1.lineWidth = annotation.strokeWidth
             }
             
-            // Pass 1: Full opacity
-            let path1 = RoughPathGenerator.generateDoodlePath(from: annotation, pass: 0)
-            path1.lineWidth = annotation.strokeWidth
             path1.lineCapStyle = .round
             path1.lineJoinStyle = .round
             color.setStroke()
             path1.stroke()
             
-            // Pass 2: Lower opacity
+            // Pass 1: Lower opacity (for double stroke effect on shapes)
             if annotation.type != .pen && annotation.type != .laser {
                 let path2 = RoughPathGenerator.generateDoodlePath(from: annotation, pass: 1)
-                path2.lineWidth = annotation.strokeWidth
+                
+                if annotation.type == .arrow, let s = annotation.arrowStart, let e = annotation.arrowEnd {
+                    let length = hypot(e.x - s.x, e.y - s.y)
+                    let dynamicWidth = min(16.0, max(4.0, length / 30.0))
+                    path2.lineWidth = dynamicWidth
+                } else {
+                    path2.lineWidth = annotation.strokeWidth
+                }
+                
                 path2.lineCapStyle = .round
                 path2.lineJoinStyle = .round
                 color.withAlphaComponent(0.65).setStroke()

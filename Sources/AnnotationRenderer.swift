@@ -44,12 +44,6 @@ class AnnotationRenderer {
                 drawText(text, in: rect, color: color, fontSize: annotation.fontSize)
             }
         } else {
-            // Draw arrowhead if needed
-            if annotation.type == .arrow {
-                let arrowPath = RoughPathGenerator.generateArrowhead(from: annotation)
-                color.setFill()
-                arrowPath.fill()
-            }
             
             // Pass 0: Full opacity
             let path1 = RoughPathGenerator.generateDoodlePath(from: annotation, pass: 0)

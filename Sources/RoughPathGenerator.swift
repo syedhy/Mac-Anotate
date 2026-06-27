@@ -73,8 +73,32 @@ class RoughPathGenerator {
                 finalControl = CGPoint(x: baseControl.x + varX, y: baseControl.y + varY)
             }
             
-            path.move(to: start)
-            path.curve(to: end, controlPoint1: finalControl, controlPoint2: finalControl)
+            let dxCtrl = end.x - finalControl.x
+            let dyCtrl = end.y - finalControl.y
+            let angle = atan2(dyCtrl, dxCtrl)
+            
+            let dynamicStrokeWidth = min(16.0, max(4.0, length / 30.0))
+            let headLength = dynamicStrokeWidth * 3.5
+            let headWidth = dynamicStrokeWidth * 3.0
+            
+            // The shaft should stop exactly at the back line of the arrowhead triangle
+            let shaftEnd = CGPoint(x: end.x - headLength * cos(angle), y: end.y - headLength * sin(angle))
+            
+            if length > headLength {
+                path.move(to: start)
+                path.curve(to: shaftEnd, controlPoint1: finalControl, controlPoint2: finalControl)
+            }
+            
+            // Draw the hollow arrowhead triangle
+            let p1 = CGPoint(x: end.x - headLength * cos(angle) - headWidth/2 * sin(angle),
+                             y: end.y - headLength * sin(angle) + headWidth/2 * cos(angle))
+            let p2 = CGPoint(x: end.x - headLength * cos(angle) + headWidth/2 * sin(angle),
+                             y: end.y - headLength * sin(angle) - headWidth/2 * cos(angle))
+            
+            path.move(to: end)
+            path.line(to: p1)
+            path.line(to: p2)
+            path.close()
             
         case .rectangle:
             guard let rect = annotation.rect else { return path }
@@ -129,35 +153,7 @@ class RoughPathGenerator {
         return path
     }
     
-    static func generateArrowhead(from annotation: Annotation) -> NSBezierPath {
-        let path = NSBezierPath()
-        guard annotation.type == .arrow, let start = annotation.arrowStart, let end = annotation.arrowEnd else { return path }
-        
-        let control = annotation.arrowControlPoint ?? CGPoint(x: (start.x + end.x) / 2, y: (start.y + end.y) / 2)
-        
-        let dx = end.x - control.x
-        let dy = end.y - control.y
-        let angle = atan2(dy, dx)
-        
-        // Dynamic arrowhead size based on length
-        let arrowLength = hypot(end.x - start.x, end.y - start.y)
-        let dynamicStrokeWidth = min(16.0, max(4.0, arrowLength / 30.0))
-        
-        let length = dynamicStrokeWidth * 3.5
-        let width = dynamicStrokeWidth * 3.0
-        
-        let p1 = CGPoint(x: end.x - length * cos(angle) - width/2 * sin(angle),
-                         y: end.y - length * sin(angle) + width/2 * cos(angle))
-        
-        let p2 = CGPoint(x: end.x - length * cos(angle) + width/2 * sin(angle),
-                         y: end.y - length * sin(angle) - width/2 * cos(angle))
-        
-        path.move(to: end)
-        path.line(to: p1)
-        path.line(to: p2)
-        path.close()
-        return path
-    }
+
     
     private static func drawRoughLine(on path: NSBezierPath, from start: CGPoint, to end: CGPoint, random: inout SeededRandom, bowDirection: CGFloat) {
         let dx = end.x - start.x

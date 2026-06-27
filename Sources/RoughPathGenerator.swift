@@ -53,13 +53,13 @@ class RoughPathGenerator {
             let length = hypot(dx, dy)
             if length < 1 { return path }
             
-            let baseControl = annotation.arrowControlPoint ?? CGPoint(x: (start.x + end.x) / 2, y: (start.y + end.y) / 2)
             let isStraight = annotation.arrowControlPoint == nil
+            let baseControl = annotation.arrowControlPoint ?? CGPoint(x: (start.x + end.x) / 2, y: (start.y + end.y) / 2)
             var finalControl = baseControl
             
             if isStraight {
-                let dirX = dx / length
-                let dirY = dy / length
+                let dirX = length > 0 ? dx / length : 0.0
+                let dirY = length > 0 ? dy / length : 0.0
                 let bowAmount = random.nextFloat(in: -0.06...0.06) * length
                 finalControl = CGPoint(x: baseControl.x - dirY * bowAmount, y: baseControl.y + dirX * bowAmount)
             } else {
@@ -68,36 +68,31 @@ class RoughPathGenerator {
                 finalControl = CGPoint(x: baseControl.x + varX, y: baseControl.y + varY)
             }
             
-            let dynamicStrokeWidth = min(16.0, max(2.0, length / 30.0))
-            let headLength = dynamicStrokeWidth * 3.5
-            let headWidth = dynamicStrokeWidth * 3.0
+            let strokeW = annotation.strokeWidth
+            let headL = strokeW * 3.5
+            let headW = strokeW * 3.0
             
             let dxCtrl = end.x - finalControl.x
             let dyCtrl = end.y - finalControl.y
-            let ctrlLen = hypot(dxCtrl, dyCtrl)
-            let dirX = ctrlLen > 0 ? dxCtrl / ctrlLen : dx / length
-            let dirY = ctrlLen > 0 ? dyCtrl / ctrlLen : dy / length
-            let angle = atan2(dirY, dirX)
+            let angle = atan2(dyCtrl, dxCtrl)
             
-            let shaftEnd = CGPoint(x: end.x - headLength * 0.8 * cos(angle), y: end.y - headLength * 0.8 * sin(angle))
+            // Shaft stops a bit BEFORE the arrowhead to make it float
+            let shaftEnd = CGPoint(x: end.x - headL * 1.2 * cos(angle), y: end.y - headL * 1.2 * sin(angle))
             
-            let wStart = dynamicStrokeWidth * random.nextFloat(in: 1.0...1.3)
-            let wMid = dynamicStrokeWidth * random.nextFloat(in: 0.6...0.9)
-            let wEnd = dynamicStrokeWidth * random.nextFloat(in: 0.9...1.2)
+            path.move(to: start)
+            let cp1 = CGPoint(x: start.x + (2.0/3.0)*(finalControl.x - start.x), y: start.y + (2.0/3.0)*(finalControl.y - start.y))
+            let cp2 = CGPoint(x: shaftEnd.x + (2.0/3.0)*(finalControl.x - shaftEnd.x), y: shaftEnd.y + (2.0/3.0)*(finalControl.y - shaftEnd.y))
+            path.curve(to: shaftEnd, controlPoint1: cp1, controlPoint2: cp2)
             
-            // Shaft
-            addVariableWidthLine(to: path, from: start, to: shaftEnd, control: finalControl, wStart: wStart, wMid: wMid, wEnd: wEnd, roundCapStart: true, roundCapEnd: false)
+            let p1 = CGPoint(x: end.x - headL * cos(angle) - headW/2 * sin(angle),
+                             y: end.y - headL * sin(angle) + headW/2 * cos(angle))
+            let p2 = CGPoint(x: end.x - headL * cos(angle) + headW/2 * sin(angle),
+                             y: end.y - headL * sin(angle) - headW/2 * cos(angle))
             
-            let p1 = CGPoint(x: end.x - headLength * cos(angle) - headWidth/2 * sin(angle),
-                             y: end.y - headLength * sin(angle) + headWidth/2 * cos(angle))
-            let p2 = CGPoint(x: end.x - headLength * cos(angle) + headWidth/2 * sin(angle),
-                             y: end.y - headLength * sin(angle) - headWidth/2 * cos(angle))
-            
-            // Draw hollow arrowhead using 3 variable width strokes
-            let hw = wEnd * 0.9 // head stroke width
-            addVariableWidthLine(to: path, from: end, to: p1, control: CGPoint(x: (end.x+p1.x)/2, y: (end.y+p1.y)/2), wStart: hw, wMid: hw*0.9, wEnd: hw*1.1, roundCapStart: true, roundCapEnd: true)
-            addVariableWidthLine(to: path, from: p1, to: p2, control: CGPoint(x: (p1.x+p2.x)/2, y: (p1.y+p2.y)/2), wStart: hw*1.1, wMid: hw*0.9, wEnd: hw*1.1, roundCapStart: true, roundCapEnd: true)
-            addVariableWidthLine(to: path, from: p2, to: end, control: CGPoint(x: (p2.x+end.x)/2, y: (p2.y+end.y)/2), wStart: hw*1.1, wMid: hw*0.9, wEnd: hw, roundCapStart: true, roundCapEnd: true)
+            path.move(to: end)
+            path.line(to: p1)
+            path.line(to: p2)
+            path.close()
             
         case .rectangle:
             guard let rect = annotation.rect else { return path }

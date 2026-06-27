@@ -111,17 +111,13 @@ struct AnnotationHitTester {
             let dx = end.x - start.x
             let dy = end.y - start.y
             let length = hypot(dx, dy)
-            let dynamicStrokeWidth = min(16.0, max(2.0, length / 30.0))
-            let headLength = dynamicStrokeWidth * 3.5
-            
+            let strokeW = annotation.strokeWidth
+            let headL = strokeW * 3.5
             let dxCtrl = end.x - control.x
             let dyCtrl = end.y - control.y
-            let ctrlLen = hypot(dxCtrl, dyCtrl)
-            let dirX = ctrlLen > 0 ? dxCtrl / ctrlLen : dx / length
-            let dirY = ctrlLen > 0 ? dyCtrl / ctrlLen : dy / length
-            let angle = atan2(dirY, dirX)
+            let angle = atan2(dyCtrl, dxCtrl)
+            let shaftEnd = CGPoint(x: end.x - headL * 1.2 * cos(angle), y: end.y - headL * 1.2 * sin(angle))
             
-            let shaftEnd = CGPoint(x: end.x - headLength * 0.8 * cos(angle), y: end.y - headLength * 0.8 * sin(angle))
             let m = CGPoint(x: 0.25 * start.x + 0.5 * control.x + 0.25 * shaftEnd.x, y: 0.25 * start.y + 0.5 * control.y + 0.25 * shaftEnd.y)
             
             let handleRadius: CGFloat = 6.0

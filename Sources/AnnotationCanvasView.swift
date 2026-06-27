@@ -339,7 +339,7 @@ class AnnotationCanvasView: NSView, NSTextFieldDelegate {
             
             currentAnnotation = nil
             
-        case .movingSelection(_, let originalAnnotation), .resizingSelection(_, _, let originalAnnotation):
+        case .movingSelection, .resizingSelection:
             // End of drag
             // We just update the state
             // If it's too small, maybe delete it, but fine for now

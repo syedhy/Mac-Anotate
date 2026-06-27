@@ -1,10 +1,11 @@
 #!/bin/bash
 set -e
 
-BUILD_DIR="/tmp/AnotateBuild"
-
 echo "Building Anotate..."
-xcodebuild -scheme Anotate CONFIGURATION_BUILD_DIR="$BUILD_DIR" build | tail -n 10
+xcodebuild -scheme Anotate build | tail -n 10
+
+echo "Finding build product..."
+BUILD_DIR=$(xcodebuild -scheme Anotate -showBuildSettings | grep -m 1 "BUILT_PRODUCTS_DIR" | grep -oE "\/.*")
 
 echo "Deploying to Applications folder..."
 rm -rf /Applications/Anotate.app

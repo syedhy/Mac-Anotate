@@ -85,19 +85,19 @@ class RoughPathGenerator {
             let wMid = dynamicStrokeWidth * random.nextFloat(in: 0.6...0.9)
             let wEnd = dynamicStrokeWidth * random.nextFloat(in: 0.9...1.2)
             
+            // Shaft
             addVariableWidthLine(to: path, from: start, to: shaftEnd, control: finalControl, wStart: wStart, wMid: wMid, wEnd: wEnd, roundCapStart: true, roundCapEnd: false)
             
             let p1 = CGPoint(x: end.x - headLength * cos(angle) - headWidth/2 * sin(angle),
                              y: end.y - headLength * sin(angle) + headWidth/2 * cos(angle))
             let p2 = CGPoint(x: end.x - headLength * cos(angle) + headWidth/2 * sin(angle),
                              y: end.y - headLength * sin(angle) - headWidth/2 * cos(angle))
-            let backMid = CGPoint(x: end.x - headLength * 0.9 * cos(angle), y: end.y - headLength * 0.9 * sin(angle))
             
-            path.move(to: end)
-            path.curve(to: p1, controlPoint1: CGPoint(x: end.x * 0.5 + p1.x * 0.5, y: end.y * 0.5 + p1.y * 0.5), controlPoint2: p1)
-            path.curve(to: p2, controlPoint1: backMid, controlPoint2: p2)
-            path.curve(to: end, controlPoint1: CGPoint(x: end.x * 0.5 + p2.x * 0.5, y: end.y * 0.5 + p2.y * 0.5), controlPoint2: end)
-            path.close()
+            // Draw hollow arrowhead using 3 variable width strokes
+            let hw = wEnd * 0.9 // head stroke width
+            addVariableWidthLine(to: path, from: end, to: p1, control: CGPoint(x: (end.x+p1.x)/2, y: (end.y+p1.y)/2), wStart: hw, wMid: hw*0.9, wEnd: hw*1.1, roundCapStart: true, roundCapEnd: true)
+            addVariableWidthLine(to: path, from: p1, to: p2, control: CGPoint(x: (p1.x+p2.x)/2, y: (p1.y+p2.y)/2), wStart: hw*1.1, wMid: hw*0.9, wEnd: hw*1.1, roundCapStart: true, roundCapEnd: true)
+            addVariableWidthLine(to: path, from: p2, to: end, control: CGPoint(x: (p2.x+end.x)/2, y: (p2.y+end.y)/2), wStart: hw*1.1, wMid: hw*0.9, wEnd: hw, roundCapStart: true, roundCapEnd: true)
             
         case .rectangle:
             guard let rect = annotation.rect else { return path }

@@ -84,8 +84,7 @@ class AnnotationRenderer {
                 handleShadow.set()
 
                 for (i, handle) in handles.enumerated() {
-                    let isControl = (annotation.type == .arrow && i == 1)
-                    let handleSize: CGFloat = isControl ? 6.0 : 8.0
+                    let handleSize: CGFloat = 12.0
                     let rect = NSRect(x: handle.x - handleSize/2, y: handle.y - handleSize/2, width: handleSize, height: handleSize)
                     let path = NSBezierPath(ovalIn: rect) // Always circles
                     

@@ -108,8 +108,35 @@ struct AnnotationHitTester {
         case .arrow:
             guard let start = annotation.arrowStart, let end = annotation.arrowEnd else { return nil }
             let control = annotation.arrowControlPoint ?? CGPoint(x: (start.x + end.x)/2, y: (start.y + end.y)/2)
-            let m = CGPoint(x: 0.25 * start.x + 0.5 * control.x + 0.25 * end.x, y: 0.25 * start.y + 0.5 * control.y + 0.25 * end.y)
-            return [start, m, end]
+            let dx = end.x - start.x
+            let dy = end.y - start.y
+            let length = hypot(dx, dy)
+            let dynamicStrokeWidth = min(16.0, max(2.0, length / 30.0))
+            let headLength = dynamicStrokeWidth * 3.5
+            
+            let dxCtrl = end.x - control.x
+            let dyCtrl = end.y - control.y
+            let ctrlLen = hypot(dxCtrl, dyCtrl)
+            let dirX = ctrlLen > 0 ? dxCtrl / ctrlLen : dx / length
+            let dirY = ctrlLen > 0 ? dyCtrl / ctrlLen : dy / length
+            let angle = atan2(dirY, dirX)
+            
+            let shaftEnd = CGPoint(x: end.x - headLength * 0.8 * cos(angle), y: end.y - headLength * 0.8 * sin(angle))
+            let m = CGPoint(x: 0.25 * start.x + 0.5 * control.x + 0.25 * shaftEnd.x, y: 0.25 * start.y + 0.5 * control.y + 0.25 * shaftEnd.y)
+            
+            let handleRadius: CGFloat = 6.0
+            
+            let startToM_dx = m.x - start.x
+            let startToM_dy = m.y - start.y
+            let startToMLen = hypot(startToM_dx, startToM_dy)
+            let insetStart = startToMLen > 0 ? CGPoint(x: start.x + (startToM_dx/startToMLen)*handleRadius, y: start.y + (startToM_dy/startToMLen)*handleRadius) : start
+            
+            let endToM_dx = m.x - end.x
+            let endToM_dy = m.y - end.y
+            let endToMLen = hypot(endToM_dx, endToM_dy)
+            let insetEnd = endToMLen > 0 ? CGPoint(x: end.x + (endToM_dx/endToMLen)*handleRadius, y: end.y + (endToM_dy/endToMLen)*handleRadius) : end
+
+            return [insetStart, m, insetEnd]
         case .rectangle, .oval, .text:
             let rect: CGRect
             if annotation.type == .text {

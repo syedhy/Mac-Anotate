@@ -24,6 +24,14 @@ class SettingsStore: ObservableObject {
         }
     }
     
+    private let fillStyleKey = "lastSelectedFillStyle"
+    
+    @Published var lastSelectedFillStyle: ShapeFillStyle {
+        didSet {
+            defaults.set(lastSelectedFillStyle.rawValue, forKey: fillStyleKey)
+        }
+    }
+    
     @Published var clearOnExit: Bool {
         didSet {
             defaults.set(clearOnExit, forKey: clearOnExitKey)
@@ -50,6 +58,13 @@ class SettingsStore: ObservableObject {
         
         let savedStroke = defaults.object(forKey: strokeWidthKey) as? Double
         self.lastSelectedStrokeWidth = CGFloat(savedStroke ?? 8.0)
+        
+        if defaults.object(forKey: fillStyleKey) == nil {
+            self.lastSelectedFillStyle = .hollow
+            defaults.set(ShapeFillStyle.hollow.rawValue, forKey: fillStyleKey)
+        } else {
+            self.lastSelectedFillStyle = ShapeFillStyle(rawValue: defaults.integer(forKey: fillStyleKey)) ?? .hollow
+        }
         
         if defaults.object(forKey: clearOnExitKey) == nil {
             self.clearOnExit = true

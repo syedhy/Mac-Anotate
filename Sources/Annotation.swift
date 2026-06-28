@@ -1,10 +1,17 @@
 import Cocoa
 
+enum ShapeFillStyle: Int, Codable {
+    case hollow
+    case translucent
+    case filled
+}
+
 struct Annotation: Identifiable {
     let id = UUID()
     let type: ToolType
     var color: NSColor
     var strokeWidth: CGFloat
+    var fillStyle: ShapeFillStyle = .hollow
     let roughnessSeed: UInt32
     let createdAt: Date
     var expiresAt: Date?

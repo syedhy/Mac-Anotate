@@ -139,6 +139,10 @@ class OverlayWindowController: NSWindowController, NSWindowDelegate {
     func undoLast() {
         canvasView.undo()
     }
+    
+    func updateSelectedFillStyle(_ style: ShapeFillStyle) {
+        canvasView.updateSelectedFillStyle(style)
+    }
 }
 
 struct ClearPromptView: View {

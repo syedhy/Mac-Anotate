@@ -10,6 +10,37 @@ struct AnnotationHitTester {
         case controlHandle(index: Int)
     }
     
+    static func getPillHitMode(point: CGPoint, annotation: Annotation) -> ShapeFillStyle? {
+        var rect = getBoundingBox(for: annotation)
+        if annotation.type == .text {
+            rect = rect.insetBy(dx: -12, dy: -12)
+        }
+        
+        let pillWidth: CGFloat = 100
+        let pillHeight: CGFloat = 32
+        
+        let pillRect = CGRect(x: rect.midX - pillWidth / 2, y: rect.minY - 45, width: pillWidth, height: pillHeight)
+        
+        if pillRect.contains(point) {
+            let spacing: CGFloat = 26
+            let startX = pillRect.midX - spacing
+            
+            let modes: [ShapeFillStyle] = [.hollow, .translucent, .filled]
+            for (i, mode) in modes.enumerated() {
+                let center = CGPoint(x: startX + CGFloat(i) * spacing, y: pillRect.midY)
+                let circleRect = CGRect(x: center.x - 12, y: center.y - 12, width: 24, height: 24)
+                if circleRect.contains(point) {
+                    return mode
+                }
+            }
+            
+            // If they clicked the pill but not a specific icon, cycle it
+            let currentIndex = modes.firstIndex(of: annotation.fillStyle) ?? 0
+            return modes[(currentIndex + 1) % modes.count]
+        }
+        return nil
+    }
+    
     static func hitTest(point: CGPoint, annotation: Annotation) -> HitResult {
         // First check handles
         if let handles = getHandles(for: annotation) {

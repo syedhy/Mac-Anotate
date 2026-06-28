@@ -11,6 +11,11 @@ struct CustomTooltipModifier: ViewModifier {
                     isHovered = hovered
                 }
             }
+            .onReceive(NotificationCenter.default.publisher(for: NSMenu.didBeginTrackingNotification)) { _ in
+                withAnimation(.easeInOut(duration: 0.1)) {
+                    isHovered = false
+                }
+            }
             .overlay(
                 Group {
                     if isHovered {
@@ -82,7 +87,7 @@ struct FloatingToolbarView: View {
                         .frame(width: 20, height: 20)
                         .overlay(
                             Circle()
-                                .stroke(Color.white, lineWidth: settings.lastSelectedColor.hexString == color.hexString ? 2 : 0)
+                                .stroke(Color.white, lineWidth: settings.lastSelectedColor == color ? 2 : 0)
                         )
                         .shadow(radius: 1)
                         .onTapGesture {
@@ -95,15 +100,17 @@ struct FloatingToolbarView: View {
                 .frame(height: 24)
             
             // Stroke Width
-            Menu {
-                Button("Thin (4pt)") { settings.lastSelectedStrokeWidth = 4 }
-                Button("Medium (8pt)") { settings.lastSelectedStrokeWidth = 8 }
-                Button("Thick (12pt)") { settings.lastSelectedStrokeWidth = 12 }
-                Button("Extra Thick (20pt)") { settings.lastSelectedStrokeWidth = 20 }
-            } label: {
+            HStack(spacing: 8) {
                 Image(systemName: "lineweight")
+                    .foregroundColor(.secondary)
+                    .font(.system(size: 14))
+                
+                TaperedStrokeSlider(value: Binding(
+                    get: { settings.lastSelectedStrokeWidth },
+                    set: { settings.lastSelectedStrokeWidth = $0 }
+                ), range: 1...50)
+                .frame(width: 80)
             }
-            .frame(width: 40)
             .customTooltip("Stroke Width")
             
             Divider()
@@ -111,17 +118,38 @@ struct FloatingToolbarView: View {
                 
             // Fill Style
             Menu {
-                Button("Hollow") { 
+                Button(action: { 
                     settings.lastSelectedFillStyle = .hollow
                     overlayController?.updateSelectedFillStyle(.hollow)
+                }) {
+                    HStack {
+                        Text("Hollow")
+                        if settings.lastSelectedFillStyle == .hollow {
+                            Image(systemName: "checkmark")
+                        }
+                    }
                 }
-                Button("Translucent") { 
+                Button(action: { 
                     settings.lastSelectedFillStyle = .translucent
                     overlayController?.updateSelectedFillStyle(.translucent)
+                }) {
+                    HStack {
+                        Text("Translucent")
+                        if settings.lastSelectedFillStyle == .translucent {
+                            Image(systemName: "checkmark")
+                        }
+                    }
                 }
-                Button("Filled") { 
+                Button(action: { 
                     settings.lastSelectedFillStyle = .filled
                     overlayController?.updateSelectedFillStyle(.filled)
+                }) {
+                    HStack {
+                        Text("Filled")
+                        if settings.lastSelectedFillStyle == .filled {
+                            Image(systemName: "checkmark")
+                        }
+                    }
                 }
             } label: {
                 Image(systemName: "square.fill.on.square")
@@ -137,6 +165,8 @@ struct FloatingToolbarView: View {
                 overlayController?.undoLast()
             }) {
                 Image(systemName: "arrow.uturn.backward")
+                    .frame(width: 32, height: 32)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(PlainButtonStyle())
             .customTooltip("Undo (Cmd+Z)")
@@ -145,6 +175,8 @@ struct FloatingToolbarView: View {
                 overlayController?.clearCanvas()
             }) {
                 Image(systemName: "trash")
+                    .frame(width: 32, height: 32)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(PlainButtonStyle())
             .customTooltip("Clear (C)")
@@ -154,6 +186,8 @@ struct FloatingToolbarView: View {
             }) {
                 Image(systemName: "xmark.circle.fill")
                     .foregroundColor(.primary)
+                    .frame(width: 32, height: 32)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(PlainButtonStyle())
             .customTooltip("Close (Esc)")
@@ -204,7 +238,79 @@ struct ToolButton: View {
                     Circle()
                         .fill(isActive ? Color.accentColor : Color.clear)
                 )
+                .contentShape(Rectangle())
         }
         .buttonStyle(PlainButtonStyle())
+    }
+}
+
+struct TaperedStrokeSlider: View {
+    @Binding var value: CGFloat
+    var range: ClosedRange<CGFloat> = 1...50
+    var activeColor: Color = .accentColor
+    var onEditingChanged: ((Bool) -> Void)? = nil
+    
+    @State private var isDragging: Bool = false
+    
+    var body: some View {
+        GeometryReader { geometry in
+            let w = geometry.size.width
+            let h = geometry.size.height
+            let minThickness: CGFloat = 2.0
+            let maxThickness: CGFloat = h * 0.8
+            
+            ZStack(alignment: .leading) {
+                // Background Track
+                Path { path in
+                    path.move(to: CGPoint(x: 0, y: h/2 - minThickness/2))
+                    path.addLine(to: CGPoint(x: w, y: h/2 - maxThickness/2))
+                    path.addArc(center: CGPoint(x: w, y: h/2), radius: maxThickness/2, startAngle: .degrees(-90), endAngle: .degrees(90), clockwise: false)
+                    path.addLine(to: CGPoint(x: 0, y: h/2 + minThickness/2))
+                    path.addArc(center: CGPoint(x: 0, y: h/2), radius: minThickness/2, startAngle: .degrees(90), endAngle: .degrees(-90), clockwise: false)
+                    path.closeSubpath()
+                }
+                .fill(Color.primary.opacity(0.4))
+                
+                // Active Track
+                let progress = max(0, min(1, (value - range.lowerBound) / (range.upperBound - range.lowerBound)))
+                let activeWidth = w * progress
+                let activeThickness = minThickness + (maxThickness - minThickness) * progress
+                
+                Path { path in
+                    path.move(to: CGPoint(x: 0, y: h/2 - minThickness/2))
+                    path.addLine(to: CGPoint(x: activeWidth, y: h/2 - activeThickness/2))
+                    path.addArc(center: CGPoint(x: activeWidth, y: h/2), radius: activeThickness/2, startAngle: .degrees(-90), endAngle: .degrees(90), clockwise: false)
+                    path.addLine(to: CGPoint(x: 0, y: h/2 + minThickness/2))
+                    path.addArc(center: CGPoint(x: 0, y: h/2), radius: minThickness/2, startAngle: .degrees(90), endAngle: .degrees(-90), clockwise: false)
+                    path.closeSubpath()
+                }
+                .fill(activeColor)
+                
+                // Thumb
+                Circle()
+                    .fill(Color.white)
+                    .shadow(color: Color.black.opacity(0.2), radius: 2, x: 0, y: 1)
+                    .overlay(Circle().stroke(Color.gray.opacity(0.2), lineWidth: 0.5))
+                    .frame(width: h, height: h)
+                    .offset(x: activeWidth - h/2)
+                    .gesture(
+                        DragGesture(minimumDistance: 0)
+                            .onChanged { gesture in
+                                if !isDragging {
+                                    isDragging = true
+                                    onEditingChanged?(true)
+                                }
+                                let p = gesture.location.x / w
+                                let clamped = max(0, min(1, p))
+                                value = range.lowerBound + clamped * (range.upperBound - range.lowerBound)
+                            }
+                            .onEnded { _ in
+                                isDragging = false
+                                onEditingChanged?(false)
+                            }
+                    )
+            }
+        }
+        .frame(height: 16)
     }
 }

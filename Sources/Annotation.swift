@@ -50,9 +50,6 @@ struct Annotation: Identifiable {
         self.createdAt = Date()
         self.fontSize = Annotation.fontSize(for: strokeWidth)
         
-        if type == .laserPen {
-            self.expiresAt = Date().addingTimeInterval(1.5) // Fades after 1.5 seconds
-        }
     }
     
     var dynamicArrowStrokeWidth: CGFloat {

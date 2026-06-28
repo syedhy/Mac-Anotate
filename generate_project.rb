@@ -1,6 +1,6 @@
 require 'xcodeproj'
 
-project_name = 'Anotate'
+project_name = 'Mac Annotate'
 project = Xcodeproj::Project.new("#{project_name}.xcodeproj")
 
 # Add a target for the Mac App
@@ -23,7 +23,7 @@ target.add_resources([assets_ref])
 # Build settings
 target.build_configuration_list.build_configurations.each do |config|
     config.build_settings['INFOPLIST_FILE'] = 'Info.plist'
-    config.build_settings['PRODUCT_BUNDLE_IDENTIFIER'] = 'com.example.Anotate'
+    config.build_settings['PRODUCT_BUNDLE_IDENTIFIER'] = 'com.example.MacAnnotate'
     config.build_settings['SWIFT_VERSION'] = '5.0'
     config.build_settings['MACOSX_DEPLOYMENT_TARGET'] = '13.0'
     config.build_settings['ASSETCATALOG_COMPILER_APPICON_NAME'] = 'AppIcon'

@@ -70,88 +70,123 @@ struct SettingsView: View {
             
             Divider()
             
-            Form {
-                Section(header: Text("General").font(.headline).padding(.bottom, 4)) {
-                    Toggle("Clear annotations on exit", isOn: $settings.clearOnExit)
-                        .toggleStyle(.switch)
-                }
-                .padding(.bottom, 16)
-                
-                Section(header: Text("Appearance").font(.headline).padding(.bottom, 4)) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Default Color:")
-                        HStack(spacing: 12) {
-                            ForEach(availableColors, id: \.self) { color in
-                                Circle()
-                                    .fill(Color(nsColor: color))
-                                    .frame(width: 24, height: 24)
-                                    .overlay(
-                                        Circle()
-                                            .stroke(Color.primary, lineWidth: settings.lastSelectedColor.hexString == color.hexString ? 3 : 0)
-                                    )
-                                    .shadow(radius: 1)
-                                    .onTapGesture {
-                                        settings.lastSelectedColor = color
-                                    }
-                            }
-                        }
-                    }
-                    .padding(.bottom, 12)
+            ScrollView {
+                VStack(spacing: 20) {
                     
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Default Stroke Width:")
-                        
-                        HStack(spacing: 16) {
-                            ForEach(strokeWidths, id: \.name) { style in
-                                Button(action: {
-                                    settings.lastSelectedStrokeWidth = style.width
-                                }) {
-                                    Text(style.name)
-                                        .padding(.horizontal, 12)
-                                        .padding(.vertical, 6)
-                                        .background(settings.lastSelectedStrokeWidth == style.width ? Color.accentColor : Color.secondary.opacity(0.2))
-                                        .foregroundColor(settings.lastSelectedStrokeWidth == style.width ? .white : .primary)
-                                        .cornerRadius(6)
-                                }
-                                .buttonStyle(PlainButtonStyle())
-                            }
-                        }
-                    }
-                }
-                .padding(.bottom, 16)
-                
-                Section(header: Text("Shortcuts").font(.headline).padding(.bottom, 4)) {
+                    // General Section
                     VStack(alignment: .leading, spacing: 12) {
-                        HStack {
-                            Text("Global Activation:")
-                            Spacer()
-                            ShortcutRecorderView(
-                                keyCode: $settings.globalShortcutKeyCode,
-                                modifiers: $settings.globalShortcutModifiers
-                            ) {
-                                // Hotkey manager update is called via property observer or here
-                                HotkeyManager.shared.registerGlobalHotkey()
+                        Text("General")
+                            .font(.headline)
+                            .foregroundColor(.secondary)
+                        
+                        VStack {
+                            Toggle("Clear annotations on exit", isOn: $settings.clearOnExit)
+                                .toggleStyle(.switch)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .padding(16)
+                        .background(Color(NSColor.controlBackgroundColor))
+                        .cornerRadius(10)
+                        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.secondary.opacity(0.1), lineWidth: 1))
+                    }
+                    
+                    // Appearance Section
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Appearance")
+                            .font(.headline)
+                            .foregroundColor(.secondary)
+                        
+                        VStack(alignment: .leading, spacing: 20) {
+                            VStack(alignment: .leading, spacing: 12) {
+                                Text("Default Color:")
+                                HStack(spacing: 12) {
+                                    ForEach(availableColors, id: \.self) { color in
+                                        Circle()
+                                            .fill(Color(nsColor: color))
+                                            .frame(width: 24, height: 24)
+                                            .overlay(
+                                                Circle()
+                                                    .stroke(Color.primary, lineWidth: settings.lastSelectedColor.hexString == color.hexString ? 3 : 0)
+                                            )
+                                            .shadow(radius: 1)
+                                            .onTapGesture {
+                                                settings.lastSelectedColor = color
+                                            }
+                                    }
+                                }
+                            }
+                            
+                            Divider()
+                            
+                            VStack(alignment: .leading, spacing: 12) {
+                                Text("Default Stroke Width:")
+                                
+                                HStack(spacing: 16) {
+                                    ForEach(strokeWidths, id: \.name) { style in
+                                        Button(action: {
+                                            settings.lastSelectedStrokeWidth = style.width
+                                        }) {
+                                            Text(style.name)
+                                                .padding(.horizontal, 12)
+                                                .padding(.vertical, 6)
+                                                .background(settings.lastSelectedStrokeWidth == style.width ? Color.accentColor : Color.secondary.opacity(0.1))
+                                                .foregroundColor(settings.lastSelectedStrokeWidth == style.width ? .white : .primary)
+                                                .cornerRadius(6)
+                                        }
+                                        .buttonStyle(PlainButtonStyle())
+                                    }
+                                }
                             }
                         }
+                        .padding(16)
+                        .background(Color(NSColor.controlBackgroundColor))
+                        .cornerRadius(10)
+                        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.secondary.opacity(0.1), lineWidth: 1))
+                    }
+                    
+                    // Shortcuts Section
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Shortcuts")
+                            .font(.headline)
+                            .foregroundColor(.secondary)
                         
-                        Divider().padding(.vertical, 4)
-                        
-                        Text("Tool Shortcuts (when active):")
-                        
-                        LazyVGrid(columns: [GridItem(.fixed(120)), GridItem(.flexible())], alignment: .leading, spacing: 6) {
-                            ShortcutRow(key: "P", action: "Pen")
-                            ShortcutRow(key: "A", action: "Arrow")
-                            ShortcutRow(key: "R", action: "Rectangle")
-                            ShortcutRow(key: "O", action: "Oval")
-                            ShortcutRow(key: "T", action: "Text")
-                            ShortcutRow(key: "L", action: "Laser")
-                            ShortcutRow(key: "C", action: "Clear All")
+                        VStack(alignment: .leading, spacing: 16) {
+                            HStack {
+                                Text("Global Activation:")
+                                Spacer()
+                                ShortcutRecorderView(
+                                    keyCode: $settings.globalShortcutKeyCode,
+                                    modifiers: $settings.globalShortcutModifiers
+                                ) {
+                                    HotkeyManager.shared.registerGlobalHotkey()
+                                }
+                            }
+                            
+                            Divider()
+                            
+                            Text("Tool Shortcuts (when active):")
+                            
+                            LazyVGrid(columns: [GridItem(.fixed(120)), GridItem(.flexible())], alignment: .leading, spacing: 8) {
+                                ShortcutRow(key: "P", action: "Pen")
+                                ShortcutRow(key: "A", action: "Arrow")
+                                ShortcutRow(key: "R", action: "Rectangle")
+                                ShortcutRow(key: "O", action: "Oval")
+                                ShortcutRow(key: "T", action: "Text")
+                                ShortcutRow(key: "L", action: "Laser")
+                                ShortcutRow(key: "C", action: "Clear All")
+                            }
                         }
+                        .padding(16)
+                        .background(Color(NSColor.controlBackgroundColor))
+                        .cornerRadius(10)
+                        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.secondary.opacity(0.1), lineWidth: 1))
                     }
                 }
+                .padding(.horizontal, 24)
+                .padding(.bottom, 24)
             }
-            .formStyle(.grouped)
-            .padding(.horizontal, 16)
+            
+            Divider()
             
             HStack {
                 Spacer()
@@ -191,6 +226,15 @@ struct ShortcutRecorderView: View {
         }
         .buttonStyle(PlainButtonStyle())
         .background(ShortcutEventMonitor(isRecording: $isRecording, keyCode: $keyCode, modifiers: $modifiers, onChanged: onShortcutChanged))
+        .onChange(of: isRecording) { recording in
+            if recording {
+                // Unregister so we can actually capture the keys
+                HotkeyManager.shared.unregisterGlobalHotkey()
+            } else {
+                // It will be re-registered in onChanged
+                onShortcutChanged()
+            }
+        }
     }
     
     private func shortcutString(keyCode: UInt32, modifiers: UInt32) -> String {

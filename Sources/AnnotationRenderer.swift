@@ -90,10 +90,11 @@ class AnnotationRenderer {
         
         let isSelected = SelectionManager.shared.selectedAnnotationIDs.contains(annotation.id)
         let isGroupSelected = isSelected && SelectionManager.shared.selectedAnnotationIDs.count > 1
+        let shouldGlow = isSelected && SelectionManager.shared.wasMarqueeSelected
         
-        // Add subtle shadow or glow if selected as a group
+        // Add subtle shadow or glow
         let shadow = NSShadow()
-        if isGroupSelected {
+        if shouldGlow {
             shadow.shadowColor = NSColor.systemBlue.withAlphaComponent(0.8)
             shadow.shadowOffset = .zero
             shadow.shadowBlurRadius = 12
@@ -103,22 +104,42 @@ class AnnotationRenderer {
             shadow.shadowBlurRadius = 4
         }
         
-        if annotation.type != .text || isGroupSelected {
+        if annotation.type != .text || shouldGlow {
             shadow.set()
         }
         
         if annotation.type == .text {
             if let text = annotation.text, let rect = annotation.textRect {
-                if isResizing {
-                    let highlightPath = NSBezierPath(roundedRect: rect.insetBy(dx: -12, dy: -12), xRadius: 8, yRadius: 8)
-                    color.withAlphaComponent(0.15).setFill()
-                    highlightPath.fill()
-                    
-                    color.withAlphaComponent(0.6).setStroke()
-                    highlightPath.lineWidth = 1.5
-                    highlightPath.stroke()
+                let boxRect = rect.insetBy(dx: -12, dy: -12)
+                let boxPath = NSBezierPath(roundedRect: boxRect, xRadius: 8, yRadius: 8)
+                
+                var textColor = color
+                
+                switch annotation.fillStyle {
+                case .hollow:
+                    if isResizing {
+                        color.withAlphaComponent(0.15).setFill()
+                        boxPath.fill()
+                        color.withAlphaComponent(0.6).setStroke()
+                        boxPath.lineWidth = 1.5
+                        boxPath.stroke()
+                    }
+                case .translucent:
+                    color.withAlphaComponent(0.2).setFill()
+                    boxPath.fill()
+                case .filled:
+                    color.setFill()
+                    boxPath.fill()
+                    // Ensure text has contrast
+                    textColor = .white
                 }
-                drawText(text, in: rect, color: color, fontSize: annotation.fontSize)
+                
+                drawText(text, in: rect, color: textColor, fontSize: annotation.fontSize)
+                
+                let isSelected = SelectionManager.shared.selectedAnnotationIDs.contains(annotation.id)
+                if isSelected && !isDragging && SelectionManager.shared.selectedAnnotationIDs.count == 1 {
+                    drawFillStylePill(annotation: annotation, rect: boxRect)
+                }
             }
         } else if annotation.type == .laserPen {
             let path = NSBezierPath()
@@ -141,13 +162,41 @@ class AnnotationRenderer {
             color.setStroke()
             path.stroke()
             
-        } else if annotation.type == .pen || annotation.type == .rectangle || annotation.type == .oval || annotation.type == .arrow {
+        } else if annotation.type == .pen || annotation.type == .arrow {
             let path1 = RoughPathGenerator.generateDoodlePath(from: annotation, pass: 0)
             path1.lineWidth = annotation.type == .arrow ? annotation.dynamicArrowStrokeWidth : annotation.strokeWidth
             path1.lineCapStyle = .round
             path1.lineJoinStyle = .round
             color.setStroke()
             path1.stroke()
+        } else if annotation.type == .rectangle || annotation.type == .oval {
+            let path1 = RoughPathGenerator.generateDoodlePath(from: annotation, pass: 0)
+            
+            // Fill style rendering
+            switch annotation.fillStyle {
+            case .hollow:
+                break
+            case .translucent:
+                color.withAlphaComponent(0.2).setFill()
+                path1.fill()
+            case .filled:
+                color.setFill()
+                path1.fill()
+            }
+            
+            if annotation.fillStyle != .filled {
+                path1.lineWidth = annotation.strokeWidth
+                path1.lineCapStyle = .round
+                path1.lineJoinStyle = .round
+                color.setStroke()
+                path1.stroke()
+            }
+            
+            // Draw floating pill menu if it's uniquely selected
+            let isSelected = SelectionManager.shared.selectedAnnotationIDs.contains(annotation.id)
+            if isSelected && !isDragging && SelectionManager.shared.selectedAnnotationIDs.count == 1, let rect = annotation.rect {
+                drawFillStylePill(annotation: annotation, rect: rect)
+            }
         } else {
             // Pass 0: Main filled shape
             let path1 = RoughPathGenerator.generateDoodlePath(from: annotation, pass: 0)
@@ -230,5 +279,65 @@ class AnnotationRenderer {
         ]
         
         text.draw(in: rect, withAttributes: attributes)
+    }
+    
+    private static func drawFillStylePill(annotation: Annotation, rect: CGRect) {
+        let pillWidth: CGFloat = 100
+        let pillHeight: CGFloat = 32
+        let pillRect = CGRect(x: rect.midX - pillWidth / 2, y: rect.minY - 45, width: pillWidth, height: pillHeight)
+        
+        let path = NSBezierPath(roundedRect: pillRect, xRadius: pillHeight / 2, yRadius: pillHeight / 2)
+        NSColor.windowBackgroundColor.withAlphaComponent(0.95).setFill()
+        path.fill()
+        
+        // Soft border
+        NSColor.separatorColor.setStroke()
+        path.lineWidth = 1
+        path.stroke()
+        
+        let handleShadow = NSShadow()
+        handleShadow.shadowColor = NSColor.black.withAlphaComponent(0.2)
+        handleShadow.shadowOffset = NSSize(width: 0, height: -2)
+        handleShadow.shadowBlurRadius = 4
+        handleShadow.set()
+        
+        // Draw 3 circles for the 3 styles
+        let modes: [ShapeFillStyle] = [.hollow, .translucent, .filled]
+        let circleRadius: CGFloat = 8
+        let spacing: CGFloat = 26
+        let startX = pillRect.midX - spacing
+        
+        for (i, mode) in modes.enumerated() {
+            let center = CGPoint(x: startX + CGFloat(i) * spacing, y: pillRect.midY)
+            let circleRect = CGRect(x: center.x - circleRadius, y: center.y - circleRadius, width: circleRadius * 2, height: circleRadius * 2)
+            let circlePath = NSBezierPath(ovalIn: circleRect)
+            
+            NSGraphicsContext.saveGraphicsState()
+            NSShadow().set() // Clear shadow for the drawing inside pill
+            
+            if mode == .hollow {
+                annotation.color.setStroke()
+                circlePath.lineWidth = 2
+                circlePath.stroke()
+            } else if mode == .translucent {
+                annotation.color.withAlphaComponent(0.2).setFill()
+                circlePath.fill()
+                annotation.color.setStroke()
+                circlePath.lineWidth = 2
+                circlePath.stroke()
+            } else {
+                annotation.color.setFill()
+                circlePath.fill()
+            }
+            
+            if mode == annotation.fillStyle {
+                // Highlight active
+                let highlightPath = NSBezierPath(ovalIn: circleRect.insetBy(dx: -3, dy: -3))
+                NSColor.systemBlue.setStroke()
+                highlightPath.lineWidth = 1.5
+                highlightPath.stroke()
+            }
+            NSGraphicsContext.restoreGraphicsState()
+        }
     }
 }

@@ -115,6 +115,7 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
         if characters.lowercased() == "a" && (event.modifierFlags.contains(.command) || event.modifierFlags.contains(.control)) {
             ToolManager.shared.activeTool = .select
             SelectionManager.shared.selectedAnnotationIDs = Set(annotations.filter { $0.type != .laserPen }.map { $0.id })
+            SelectionManager.shared.wasMarqueeSelected = true
             needsDisplay = true
             return
         }
@@ -133,6 +134,26 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
                 needsDisplay = true
             }
             return
+        }
+        
+        // R to toggle fill style
+        if characters.lowercased() == "r" {
+            if SelectionManager.shared.selectedAnnotationIDs.count == 1,
+               let id = SelectionManager.shared.selectedAnnotationIDs.first,
+               let index = annotations.firstIndex(where: { $0.id == id }) {
+                let ann = annotations[index]
+                if ann.type == .rectangle || ann.type == .oval || ann.type == .text {
+                    let nextStyle: ShapeFillStyle
+                    switch ann.fillStyle {
+                    case .hollow: nextStyle = .translucent
+                    case .translucent: nextStyle = .filled
+                    case .filled: nextStyle = .hollow
+                    }
+                    annotations[index].fillStyle = nextStyle
+                    needsDisplay = true
+                    return
+                }
+            }
         }
         
         // Switch tools
@@ -215,6 +236,17 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
         
         // If in Select mode, check hit test
         if tool == .select {
+            if SelectionManager.shared.selectedAnnotationIDs.count == 1 {
+                let selectedID = SelectionManager.shared.selectedAnnotationIDs.first!
+                if let index = annotations.firstIndex(where: { $0.id == selectedID }) {
+                    if let newStyle = AnnotationHitTester.getPillHitMode(point: point, annotation: annotations[index]) {
+                        updateSelectedFillStyle(newStyle)
+                        needsDisplay = true
+                        return
+                    }
+                }
+            }
+            
             if SelectionManager.shared.selectedAnnotationIDs.count > 1 {
                 if let groupBB = AnnotationHitTester.getGroupBoundingBox(for: annotations, selectedIDs: SelectionManager.shared.selectedAnnotationIDs) {
                     let groupHandle = CGPoint(x: groupBB.maxX, y: groupBB.maxY)
@@ -291,6 +323,7 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
                         }
                     } else {
                         SelectionManager.shared.selectedAnnotationIDs = [annotation.id]
+                        SelectionManager.shared.wasMarqueeSelected = false
                     }
                     
                     var originals: [UUID: Annotation] = [:]
@@ -318,7 +351,9 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
         // Otherwise, start drawing
         SelectionManager.shared.clearSelection()
         interactionState = .drawingNewAnnotation
-        currentAnnotation = Annotation(type: tool, color: color, strokeWidth: width)
+        var newAnn = Annotation(type: tool, color: color, strokeWidth: width)
+        newAnn.fillStyle = SettingsStore.shared.lastSelectedFillStyle
+        currentAnnotation = newAnn
         
         if tool == .arrow {
             currentAnnotation?.arrowStart = point
@@ -579,6 +614,9 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
         case .marqueeSelection:
             marqueeRect = nil
             interactionState = .idle
+            if !SelectionManager.shared.selectedAnnotationIDs.isEmpty {
+                SelectionManager.shared.wasMarqueeSelected = true
+            }
             needsDisplay = true
             
         case .drawingNewAnnotation:
@@ -638,6 +676,22 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
     }
     private var activeTextMaxWidth: CGFloat = 300.0
     
+    func updateSelectedFillStyle(_ style: ShapeFillStyle) {
+        var updated = false
+        for id in SelectionManager.shared.selectedAnnotationIDs {
+            if let index = annotations.firstIndex(where: { $0.id == id }) {
+                let type = annotations[index].type
+                if type == .rectangle || type == .oval || type == .text {
+                    annotations[index].fillStyle = style
+                    updated = true
+                }
+            }
+        }
+        if updated {
+            needsDisplay = true
+        }
+    }
+    
     private func startTextEditing(at point: CGPoint) {
         if let existing = activeTextView {
             existing.removeFromSuperview()
@@ -649,8 +703,13 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
         let availableWidth = (self.bounds.width - point.x) - 20
         activeTextMaxWidth = max(50.0, availableWidth) // Unlimited up to screen edge
         
-        let textView = NSTextView(frame: NSRect(x: point.x, y: point.y - 12, width: 50, height: 30))
-        setupTextView(textView)
+        let fillStyle = SettingsStore.shared.lastSelectedFillStyle
+        let inset: CGFloat = fillStyle == .hollow ? 0 : 12
+        let initialWidth: CGFloat = 50 + 2 * inset
+        let initialHeight: CGFloat = 30 + 2 * inset
+        
+        let textView = NSTextView(frame: NSRect(x: point.x - inset, y: point.y + inset - initialHeight, width: initialWidth, height: initialHeight))
+        setupTextView(textView, fillStyle: fillStyle, color: SettingsStore.shared.lastSelectedColor)
         
         self.addSubview(textView)
         self.window?.makeFirstResponder(textView)
@@ -670,10 +729,14 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
         let availableWidth = (self.bounds.width - rect.minX) - 20
         activeTextMaxWidth = max(50.0, availableWidth)
         
-        let textView = NSTextView(frame: NSRect(x: rect.minX, y: rect.minY, width: max(rect.width, 50), height: max(rect.height, 30)))
-        setupTextView(textView)
+        let fillStyle = existingAnnotation.fillStyle
+        let inset: CGFloat = fillStyle == .hollow ? 0 : 12
+        let initialWidth = max(rect.width, 50) + 2 * inset
+        let initialHeight = max(rect.height, 30) + 2 * inset
+        
+        let textView = NSTextView(frame: NSRect(x: rect.minX - inset, y: rect.maxY + inset - initialHeight, width: initialWidth, height: initialHeight))
+        setupTextView(textView, fillStyle: fillStyle, color: existingAnnotation.color)
         textView.font = NSFont(name: "Marker Felt", size: existingAnnotation.fontSize) ?? NSFont.systemFont(ofSize: existingAnnotation.fontSize, weight: .bold)
-        textView.textColor = existingAnnotation.color
         textView.string = existingAnnotation.text ?? ""
         
         self.addSubview(textView)
@@ -689,21 +752,41 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
         adjustTextViewSize(textView)
     }
     
-    private func setupTextView(_ textView: NSTextView) {
+    private func setupTextView(_ textView: NSTextView, fillStyle: ShapeFillStyle, color: NSColor) {
         textView.delegate = self
-        textView.drawsBackground = false
+        
+        switch fillStyle {
+        case .hollow:
+            textView.drawsBackground = false
+            textView.textColor = color
+            textView.textContainerInset = NSSize(width: 0, height: 0)
+        case .translucent:
+            textView.drawsBackground = true
+            textView.backgroundColor = color.withAlphaComponent(0.2)
+            textView.textColor = color
+            textView.textContainerInset = NSSize(width: 12, height: 12)
+        case .filled:
+            textView.drawsBackground = true
+            textView.backgroundColor = color
+            textView.textColor = .white
+            textView.textContainerInset = NSSize(width: 12, height: 12)
+        }
+        
+        textView.wantsLayer = true
+        textView.layer?.cornerRadius = 8
+        
         textView.isRichText = false
         let fontSize = Annotation.fontSize(for: SettingsStore.shared.lastSelectedStrokeWidth)
         textView.font = NSFont(name: "Marker Felt", size: fontSize) ?? NSFont.systemFont(ofSize: fontSize, weight: .bold)
-        textView.textColor = SettingsStore.shared.lastSelectedColor
+        
         textView.isEditable = true
         textView.isSelectable = true
         textView.isVerticallyResizable = true
         textView.isHorizontallyResizable = true
         textView.autoresizingMask = [.width]
-        textView.textContainer?.containerSize = NSSize(width: activeTextMaxWidth, height: .greatestFiniteMagnitude)
+        textView.textContainer?.containerSize = NSSize(width: activeTextMaxWidth + 2 * textView.textContainerInset.width, height: .greatestFiniteMagnitude)
         textView.textContainer?.widthTracksTextView = false
-        textView.textContainerInset = NSSize(width: 0, height: 0)
+        textView.textContainer?.lineFragmentPadding = 0
     }
     
     func textDidChange(_ notification: Notification) {
@@ -716,8 +799,10 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
         
         layoutManager.ensureLayout(for: textContainer)
         let usedRect = layoutManager.usedRect(for: textContainer)
-        let requiredHeight = max(30.0, usedRect.height + 10.0) // Add padding
-        let requiredWidth = max(50.0, min(activeTextMaxWidth, usedRect.width + 10.0)) // Add padding
+        let insetX = textView.textContainerInset.width
+        let insetY = textView.textContainerInset.height
+        let requiredHeight = max(30.0 + 2 * insetY, usedRect.height + 2 * insetY)
+        let requiredWidth = max(50.0 + 2 * insetX, min(activeTextMaxWidth + 2 * insetX, usedRect.width + 2 * insetX))
         let currentFrame = textView.frame
         
         var newFrame = currentFrame
@@ -768,13 +853,14 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
                 attributes: attributes
             )
             
-            let finalWidth = max(50.0, boundingRect.width + 10.0) // tiny padding for italics
+            let insetX = textView.textContainerInset.width
+            let insetY = textView.textContainerInset.height
+            let finalWidth = max(50.0, boundingRect.width)
             let finalHeight = max(30.0, boundingRect.height)
-            let heightDiff = finalHeight - textView.frame.height
             
             let finalRect = CGRect(
-                x: textView.frame.minX,
-                y: textView.frame.minY - heightDiff,
+                x: textView.frame.minX + insetX,
+                y: textView.frame.maxY - insetY - finalHeight,
                 width: finalWidth,
                 height: finalHeight
             )
@@ -790,6 +876,7 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
                 annotation.text = text
                 annotation.textRect = finalRect
                 annotation.fontSize = font.pointSize
+                annotation.fillStyle = SettingsStore.shared.lastSelectedFillStyle
                 annotations.append(annotation)
                 
                 ToolManager.shared.activeTool = .select

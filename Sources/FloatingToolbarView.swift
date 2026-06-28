@@ -108,6 +108,29 @@ struct FloatingToolbarView: View {
             
             Divider()
                 .frame(height: 24)
+                
+            // Fill Style
+            Menu {
+                Button("Hollow") { 
+                    settings.lastSelectedFillStyle = .hollow
+                    overlayController?.updateSelectedFillStyle(.hollow)
+                }
+                Button("Translucent") { 
+                    settings.lastSelectedFillStyle = .translucent
+                    overlayController?.updateSelectedFillStyle(.translucent)
+                }
+                Button("Filled") { 
+                    settings.lastSelectedFillStyle = .filled
+                    overlayController?.updateSelectedFillStyle(.filled)
+                }
+            } label: {
+                Image(systemName: "square.fill.on.square")
+            }
+            .frame(width: 40)
+            .customTooltip("Fill Style")
+            
+            Divider()
+                .frame(height: 24)
             
             // Actions
             Button(action: {

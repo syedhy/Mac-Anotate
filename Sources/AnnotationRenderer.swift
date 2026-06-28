@@ -8,6 +8,7 @@ class AnnotationRenderer {
         for annotation in annotations {
             let isHovered = (annotation.id == hoveredID)
             let isSelected = (SelectionManager.shared.selectedAnnotationID == annotation.id)
+            let isDraggingThis = isDragging && isSelected
             
             var color = annotation.color
             if isHovered && !isSelected {
@@ -23,9 +24,9 @@ class AnnotationRenderer {
                 let alpha = max(0, min(1.0, CGFloat(timeLeft / 0.5)))
                 
                 let fadedColor = color.withAlphaComponent(alpha)
-                drawAnnotation(annotation, color: fadedColor, in: context, isDragging: isDragging)
+                drawAnnotation(annotation, color: fadedColor, in: context, isDragging: isDraggingThis)
             } else {
-                drawAnnotation(annotation, color: color, in: context, isDragging: isDragging)
+                drawAnnotation(annotation, color: color, in: context, isDragging: isDraggingThis)
             }
         }
     }
@@ -46,9 +47,39 @@ class AnnotationRenderer {
         
         if annotation.type == .text {
             if let text = annotation.text, let rect = annotation.textRect {
+                if isDragging {
+                    let highlightPath = NSBezierPath(roundedRect: rect.insetBy(dx: -12, dy: -12), xRadius: 8, yRadius: 8)
+                    color.withAlphaComponent(0.25).setFill()
+                    highlightPath.fill()
+                    
+                    color.withAlphaComponent(0.6).setStroke()
+                    highlightPath.lineWidth = 1.5
+                    highlightPath.stroke()
+                }
                 drawText(text, in: rect, color: color, fontSize: annotation.fontSize)
             }
-        } else if annotation.type == .pen || annotation.type == .laser || annotation.type == .rectangle || annotation.type == .oval || annotation.type == .arrow {
+        } else if annotation.type == .laserPen {
+            let path = NSBezierPath()
+            guard annotation.points.count >= 2 else { return }
+            path.move(to: annotation.points[0])
+            for i in 1..<annotation.points.count {
+                path.line(to: annotation.points[i])
+            }
+            
+            path.lineCapStyle = .round
+            path.lineJoinStyle = .round
+            
+            // Draw outer glow (constant thickness 12)
+            path.lineWidth = 12.0
+            color.withAlphaComponent(0.3).setStroke()
+            path.stroke()
+            
+            // Draw inner core (constant thickness 3)
+            path.lineWidth = 3.0
+            color.setStroke()
+            path.stroke()
+            
+        } else if annotation.type == .pen || annotation.type == .rectangle || annotation.type == .oval || annotation.type == .arrow {
             let path1 = RoughPathGenerator.generateDoodlePath(from: annotation, pass: 0)
             path1.lineWidth = annotation.type == .arrow ? annotation.dynamicArrowStrokeWidth : annotation.strokeWidth
             path1.lineCapStyle = .round

@@ -23,7 +23,17 @@ struct Annotation: Identifiable {
     // For text
     var text: String?
     var textRect: CGRect?
-    var fontSize: CGFloat = 32.0
+    var fontSize: CGFloat = 28.0
+    
+    static func fontSize(for strokeWidth: CGFloat) -> CGFloat {
+        switch strokeWidth {
+        case 4: return 20.0
+        case 8: return 28.0 // current default
+        case 12: return 36.0
+        case 20: return 48.0
+        default: return 28.0
+        }
+    }
     
     init(type: ToolType, color: NSColor, strokeWidth: CGFloat) {
         self.type = type
@@ -31,8 +41,9 @@ struct Annotation: Identifiable {
         self.strokeWidth = strokeWidth
         self.roughnessSeed = arc4random()
         self.createdAt = Date()
+        self.fontSize = Annotation.fontSize(for: strokeWidth)
         
-        if type == .laser {
+        if type == .laserPen {
             self.expiresAt = Date().addingTimeInterval(1.5) // Fades after 1.5 seconds
         }
     }

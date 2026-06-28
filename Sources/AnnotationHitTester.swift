@@ -25,7 +25,7 @@ struct AnnotationHitTester {
         
         // Then check body
         switch annotation.type {
-        case .pen, .laser:
+        case .pen, .laserPen:
             guard annotation.points.count > 0 else { return .none }
             if annotation.points.count == 1 {
                 if point.distance(to: annotation.points[0]) < hitTolerance { return .body }
@@ -106,7 +106,7 @@ struct AnnotationHitTester {
             if rect.insetBy(dx: -hitTolerance, dy: -hitTolerance).contains(point) {
                 return .body
             }
-        case .select:
+        case .select, .laserPointer:
             break
         }
         
@@ -148,9 +148,9 @@ struct AnnotationHitTester {
             if annotation.type == .text {
                 guard let r = annotation.textRect else { return nil }
                 return [
-                    CGPoint(x: r.minX, y: r.midY), // 0: left
-                    CGPoint(x: r.maxX, y: r.midY), // 1: right
-                    CGPoint(x: r.maxX, y: r.minY)  // 2: bottom-right (scale)
+                    CGPoint(x: r.minX - 12, y: r.midY), // 0: left
+                    CGPoint(x: r.maxX + 12, y: r.midY), // 1: right
+                    CGPoint(x: r.maxX + 12, y: r.minY - 12)  // 2: bottom-right (scale)
                 ]
             } else {
                 guard let r = annotation.rect else { return nil }
@@ -161,7 +161,7 @@ struct AnnotationHitTester {
                     CGPoint(x: r.maxX, y: r.maxY)
                 ]
             }
-        case .pen, .laser:
+        case .pen, .laserPen:
             guard !annotation.points.isEmpty else { return nil }
             var minX = annotation.points[0].x
             var minY = annotation.points[0].y

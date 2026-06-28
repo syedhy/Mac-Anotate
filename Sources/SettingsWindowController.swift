@@ -289,45 +289,55 @@ struct ShortcutEventMonitor: NSViewRepresentable {
     var onChanged: () -> Void
     
     func makeNSView(context: Context) -> NSView {
-        let view = MonitorView()
-        view.onKeyDown = { event in
-            if isRecording {
-                let flags = event.modifierFlags
-                
-                var carbonModifiers: Int = 0
-                if flags.contains(.control) { carbonModifiers |= controlKey }
-                if flags.contains(.option) { carbonModifiers |= optionKey }
-                if flags.contains(.shift) { carbonModifiers |= shiftKey }
-                if flags.contains(.command) { carbonModifiers |= cmdKey }
-                
-                // Disallow keys without modifiers
-                if carbonModifiers == 0 {
-                    isRecording = false
-                    return
-                }
-                
-                keyCode = UInt32(event.keyCode)
-                modifiers = UInt32(carbonModifiers)
-                isRecording = false
-                onChanged()
-            }
-        }
-        return view
+        return MonitorView()
     }
     
-    func updateNSView(_ nsView: NSView, context: Context) {}
+    func updateNSView(_ nsView: NSView, context: Context) {
+        if let view = nsView as? MonitorView {
+            view.onKeyDown = { event in
+                if isRecording {
+                    let flags = event.modifierFlags
+                    
+                    var carbonModifiers: Int = 0
+                    if flags.contains(.control) { carbonModifiers |= controlKey }
+                    if flags.contains(.option) { carbonModifiers |= optionKey }
+                    if flags.contains(.shift) { carbonModifiers |= shiftKey }
+                    if flags.contains(.command) { carbonModifiers |= cmdKey }
+                    
+                    // Handle Escape to cancel
+                    if event.keyCode == 53 && carbonModifiers == 0 {
+                        DispatchQueue.main.async { isRecording = false }
+                        return true
+                    }
+                    
+                    // Disallow keys without modifiers
+                    if carbonModifiers == 0 {
+                        return true
+                    }
+                    
+                    DispatchQueue.main.async {
+                        keyCode = UInt32(event.keyCode)
+                        modifiers = UInt32(carbonModifiers)
+                        isRecording = false
+                        onChanged()
+                    }
+                    return true
+                }
+                return false
+            }
+        }
+    }
     
     class MonitorView: NSView {
-        var onKeyDown: ((NSEvent) -> Void)?
+        var onKeyDown: ((NSEvent) -> Bool)?
         private var monitor: Any?
         
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
             if window != nil {
                 monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-                    self?.onKeyDown?(event)
-                    // If we processed it, consume it so it doesn't beep
-                    return (self != nil && self!.window?.firstResponder is MonitorView) ? nil : event
+                    let consumed = self?.onKeyDown?(event) ?? false
+                    return consumed ? nil : event
                 }
             } else if let monitor = monitor {
                 NSEvent.removeMonitor(monitor)

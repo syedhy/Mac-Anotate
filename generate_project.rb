@@ -16,6 +16,10 @@ Dir.glob('Sources/*.swift').each do |file|
     target.add_file_references([file_ref])
 end
 
+# Add Assets.xcassets
+assets_ref = project.main_group.new_reference('Assets.xcassets')
+target.add_resources([assets_ref])
+
 # Build settings
 target.build_configuration_list.build_configurations.each do |config|
     config.build_settings['INFOPLIST_FILE'] = 'Info.plist'

@@ -8,7 +8,8 @@ enum ToolType: String, CaseIterable {
     case rectangle
     case oval
     case text
-    case laser
+    case laserPointer
+    case laserPen
     
     var iconName: String {
         switch self {
@@ -18,7 +19,21 @@ enum ToolType: String, CaseIterable {
         case .rectangle: return "rectangle"
         case .oval: return "oval"
         case .text: return "textformat"
-        case .laser: return "wand.and.rays"
+        case .laserPointer: return "smallcircle.filled.circle"
+        case .laserPen: return "wand.and.rays"
+        }
+    }
+    
+    var name: String {
+        switch self {
+        case .select: return "Select"
+        case .pen: return "Pen"
+        case .arrow: return "Arrow"
+        case .rectangle: return "Rectangle"
+        case .oval: return "Oval"
+        case .text: return "Text"
+        case .laserPointer: return "Laser Pointer"
+        case .laserPen: return "Laser Pen"
         }
     }
     
@@ -30,7 +45,8 @@ enum ToolType: String, CaseIterable {
         case .rectangle: return "r"
         case .oval: return "o"
         case .text: return "t"
-        case .laser: return "l"
+        case .laserPointer: return "l"
+        case .laserPen: return "l"
         }
     }
 }
@@ -44,6 +60,16 @@ class ToolManager: ObservableObject {
     
     func handleKeyPress(_ characters: String) -> Bool {
         let char = characters.lowercased()
+        
+        if char == "l" {
+            if activeTool == .laserPointer {
+                activeTool = .laserPen
+            } else {
+                activeTool = .laserPointer
+            }
+            return true
+        }
+        
         for tool in ToolType.allCases {
             if tool.keyEquivalent == char {
                 activeTool = tool

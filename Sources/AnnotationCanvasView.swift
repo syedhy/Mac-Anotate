@@ -4,6 +4,7 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
     
     private var annotations: [Annotation] = []
     private var currentAnnotation: Annotation?
+    private var laserPointerLocation: CGPoint?
     private var laserTimer: Timer?
     
     private var editingTextIndex: Int?
@@ -47,15 +48,15 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
     }
     
     private func checkForActiveLasers() {
-        let hasLasers = annotations.contains { $0.type == .laser && ($0.expiresAt ?? Date()) > Date() }
-        let hasCurrentLaser = currentAnnotation?.type == .laser
+        let hasLasers = annotations.contains { $0.type == .laserPen && ($0.expiresAt ?? Date()) > Date() }
+        let hasCurrentLaser = currentAnnotation?.type == .laserPen
         
         if hasLasers || hasCurrentLaser {
             needsDisplay = true
             
             // Clean up expired lasers to save memory
             let now = Date()
-            annotations.removeAll { $0.type == .laser && ($0.expiresAt ?? now) < now }
+            annotations.removeAll { $0.type == .laserPen && ($0.expiresAt ?? now) < now }
         }
     }
     
@@ -84,7 +85,7 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
             } else if ToolManager.shared.activeTool != .select {
                 // Switch to select tool and select the last drawn annotation
                 ToolManager.shared.activeTool = .select
-                if let last = annotations.last, last.type != .laser, last.type != .pen {
+                if let last = annotations.last, last.type != .laserPen, last.type != .pen {
                     SelectionManager.shared.selectedAnnotationID = last.id
                 }
                 needsDisplay = true
@@ -158,6 +159,14 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
         
         if hoveredAnnotationID != newHover {
             hoveredAnnotationID = newHover
+            needsDisplay = true
+        }
+        
+        if ToolManager.shared.activeTool == .laserPointer {
+            laserPointerLocation = point
+            needsDisplay = true
+        } else if laserPointerLocation != nil {
+            laserPointerLocation = nil
             needsDisplay = true
         }
     }
@@ -250,6 +259,13 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
     override func mouseDragged(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
         
+        if ToolManager.shared.activeTool == .laserPointer {
+            laserPointerLocation = point
+            needsDisplay = true
+            return
+        }
+        
+        
         switch interactionState {
         case .idle:
             break
@@ -293,7 +309,7 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
                 if let r = moved.rect {
                     moved.rect = r.offsetBy(dx: dx, dy: dy)
                 }
-            } else if moved.type == .pen || moved.type == .laser {
+            } else if moved.type == .pen || moved.type == .laserPen {
                 moved.points = moved.points.map { CGPoint(x: $0.x + dx, y: $0.y + dy) }
             } else if moved.type == .text {
                 if let r = moved.textRect {
@@ -318,7 +334,7 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
                 } else if handleIndex == 2 {
                     resized.arrowEnd = CGPoint(x: resized.arrowEnd!.x + dx, y: resized.arrowEnd!.y + dy)
                 }
-            } else if resized.type == .pen || resized.type == .laser {
+            } else if resized.type == .pen || resized.type == .laserPen {
                 if let handles = AnnotationHitTester.getHandles(for: originalAnnotation) {
                     let oppositeIndex = 3 - handleIndex
                     let anchor = handles[oppositeIndex]
@@ -460,7 +476,7 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
                 }
             } else {
                 finalAnnotation.points.append(point)
-                if finalAnnotation.points.count > 1 || finalAnnotation.type == .pen || finalAnnotation.type == .laser {
+                if finalAnnotation.points.count > 1 || finalAnnotation.type == .pen || finalAnnotation.type == .laserPen {
                     annotations.append(finalAnnotation)
                     annotationAdded = true
                 }
@@ -488,8 +504,10 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
         interactionState = .idle
         needsDisplay = true
     }
+    private var activeTextMaxWidth: CGFloat = 300.0
+    
     private func startTextEditing(at point: CGPoint) {
-        if let existing = activeTextField {
+        if let existing = activeTextView {
             existing.removeFromSuperview()
         }
         
@@ -497,11 +515,9 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
         
         // Calculate available width based on click position and window bounds
         let availableWidth = (self.bounds.width - point.x) - 20
-        let defaultWidth = min(300.0, availableWidth)
-        let finalWidth = max(50.0, defaultWidth) // Ensure minimum width of 50
+        activeTextMaxWidth = max(50.0, availableWidth) // Unlimited up to screen edge
         
-        let textField = NSTextField(frame: NSRect(x: point.x, y: point.y - 12, width: finalWidth, height: 30))
-        let textView = NSTextView(frame: NSRect(x: point.x, y: point.y - 12, width: finalWidth, height: 30))
+        let textView = NSTextView(frame: NSRect(x: point.x, y: point.y - 12, width: 50, height: 30))
         setupTextView(textView)
         
         self.addSubview(textView)
@@ -519,8 +535,13 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
         editingTextIndex = index
         let rect = existingAnnotation.textRect ?? CGRect(x: 0, y: 0, width: 200, height: 30)
         
+        let availableWidth = (self.bounds.width - rect.minX) - 20
+        activeTextMaxWidth = max(50.0, availableWidth)
+        
         let textView = NSTextView(frame: NSRect(x: rect.minX, y: rect.minY, width: max(rect.width, 50), height: max(rect.height, 30)))
         setupTextView(textView)
+        textView.font = NSFont(name: "Marker Felt", size: existingAnnotation.fontSize) ?? NSFont.systemFont(ofSize: existingAnnotation.fontSize, weight: .bold)
+        textView.textColor = existingAnnotation.color
         textView.string = existingAnnotation.text ?? ""
         
         self.addSubview(textView)
@@ -532,43 +553,58 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
         activeTextView = textView
         self.needsDisplay = true // Redraw to hide the original annotation
         
-        // Ensure proper initial height
-        adjustTextViewHeight(textView)
+        // Ensure proper initial size
+        adjustTextViewSize(textView)
     }
     
     private func setupTextView(_ textView: NSTextView) {
         textView.delegate = self
         textView.drawsBackground = false
         textView.isRichText = false
-        textView.font = NSFont(name: "Marker Felt", size: 28) ?? NSFont.systemFont(ofSize: 24, weight: .bold)
+        let fontSize = Annotation.fontSize(for: SettingsStore.shared.lastSelectedStrokeWidth)
+        textView.font = NSFont(name: "Marker Felt", size: fontSize) ?? NSFont.systemFont(ofSize: fontSize, weight: .bold)
         textView.textColor = SettingsStore.shared.lastSelectedColor
         textView.isEditable = true
         textView.isSelectable = true
         textView.isVerticallyResizable = true
-        textView.isHorizontallyResizable = false
+        textView.isHorizontallyResizable = true
         textView.autoresizingMask = [.width]
-        textView.textContainer?.containerSize = NSSize(width: textView.frame.width, height: .greatestFiniteMagnitude)
-        textView.textContainer?.widthTracksTextView = true
+        textView.textContainer?.containerSize = NSSize(width: activeTextMaxWidth, height: .greatestFiniteMagnitude)
+        textView.textContainer?.widthTracksTextView = false
         textView.textContainerInset = NSSize(width: 0, height: 0)
     }
     
     func textDidChange(_ notification: Notification) {
         guard let textView = notification.object as? NSTextView else { return }
-        adjustTextViewHeight(textView)
+        adjustTextViewSize(textView)
     }
     
-    private func adjustTextViewHeight(_ textView: NSTextView) {
+    private func adjustTextViewSize(_ textView: NSTextView) {
         guard let layoutManager = textView.layoutManager, let textContainer = textView.textContainer else { return }
         
         layoutManager.ensureLayout(for: textContainer)
         let usedRect = layoutManager.usedRect(for: textContainer)
         let requiredHeight = max(30.0, usedRect.height + 10.0) // Add padding
+        let requiredWidth = max(50.0, min(activeTextMaxWidth, usedRect.width + 10.0)) // Add padding
         let currentFrame = textView.frame
+        
+        var newFrame = currentFrame
+        var changed = false
         
         if requiredHeight > currentFrame.height {
             let heightDiff = requiredHeight - currentFrame.height
             // NSView origin is bottom-left, so to keep the top edge fixed, we decrease Y by the height difference
-            let newFrame = NSRect(x: currentFrame.minX, y: currentFrame.minY - heightDiff, width: currentFrame.width, height: requiredHeight)
+            newFrame.origin.y -= heightDiff
+            newFrame.size.height = requiredHeight
+            changed = true
+        }
+        
+        if requiredWidth != currentFrame.width {
+            newFrame.size.width = requiredWidth
+            changed = true
+        }
+        
+        if changed {
             textView.frame = newFrame
         }
     }
@@ -592,20 +628,22 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
         if !text.isEmpty {
             let font = textView.font ?? NSFont(name: "Marker Felt", size: 28) ?? NSFont.systemFont(ofSize: 24, weight: .bold)
             
+            // Strictly calculate text bounds to snap the handles perfectly
             let attributes: [NSAttributedString.Key: Any] = [.font: font]
             let boundingRect = (text as NSString).boundingRect(
-                with: NSSize(width: textView.frame.width, height: .greatestFiniteMagnitude),
+                with: NSSize(width: activeTextMaxWidth, height: .greatestFiniteMagnitude),
                 options: [.usesLineFragmentOrigin, .usesFontLeading],
                 attributes: attributes
             )
             
-            // Adjust the final rect to match the exact text height, but anchored at the top
-            let finalHeight = max(30, boundingRect.height)
+            let finalWidth = max(50.0, boundingRect.width + 10.0) // tiny padding for italics
+            let finalHeight = max(30.0, boundingRect.height)
             let heightDiff = finalHeight - textView.frame.height
+            
             let finalRect = CGRect(
                 x: textView.frame.minX,
                 y: textView.frame.minY - heightDiff,
-                width: textView.frame.width,
+                width: finalWidth,
                 height: finalHeight
             )
             
@@ -649,10 +687,10 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
     }
     
     private var isDragging: Bool {
-        if case .idle = interactionState {
-            return false
+        if case .resizingSelection = interactionState {
+            return true
         }
-        return true
+        return false
     }
 
     override func draw(_ dirtyRect: NSRect) {
@@ -666,11 +704,24 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
             annotationsToDraw.remove(at: editingIndex)
         }
         
-        AnnotationRenderer.draw(annotationsToDraw, in: context, hoveredID: hoveredAnnotationID)
+        AnnotationRenderer.draw(annotationsToDraw, in: context, isDragging: self.isDragging, hoveredID: hoveredAnnotationID)
         
         // Draw in-progress annotation
         if let current = currentAnnotation {
-            AnnotationRenderer.draw([current], in: context, isDragging: isDragging)
+            AnnotationRenderer.draw([current], in: context, isDragging: self.isDragging)
+        }
+        
+        // Draw laser pointer
+        if ToolManager.shared.activeTool == .laserPointer, let pointerLoc = laserPointerLocation {
+            let color = SettingsStore.shared.lastSelectedColor
+            
+            // Outer glow
+            context.setFillColor(color.withAlphaComponent(0.3).cgColor)
+            context.fillEllipse(in: CGRect(x: pointerLoc.x - 12, y: pointerLoc.y - 12, width: 24, height: 24))
+            
+            // Inner core
+            context.setFillColor(color.cgColor)
+            context.fillEllipse(in: CGRect(x: pointerLoc.x - 4, y: pointerLoc.y - 4, width: 8, height: 8))
         }
     }
 }

@@ -9,6 +9,8 @@ class SettingsStore: ObservableObject {
     private let colorKey = "lastSelectedColorHex"
     private let strokeWidthKey = "lastSelectedStrokeWidth"
     private let clearOnExitKey = "clearOnExit"
+    private let globalShortcutKeyCodeKey = "globalShortcutKeyCode"
+    private let globalShortcutModifiersKey = "globalShortcutModifiers"
     
     @Published var lastSelectedColor: NSColor {
         didSet {
@@ -28,6 +30,18 @@ class SettingsStore: ObservableObject {
         }
     }
     
+    @Published var globalShortcutKeyCode: UInt32 {
+        didSet {
+            defaults.set(Int(globalShortcutKeyCode), forKey: globalShortcutKeyCodeKey)
+        }
+    }
+    
+    @Published var globalShortcutModifiers: UInt32 {
+        didSet {
+            defaults.set(Int(globalShortcutModifiers), forKey: globalShortcutModifiersKey)
+        }
+    }
+    
     private init() {
         // Default color: Bright Red
         let defaultColorHex = "#FF3B30"
@@ -42,6 +56,22 @@ class SettingsStore: ObservableObject {
             defaults.set(true, forKey: clearOnExitKey)
         } else {
             self.clearOnExit = defaults.bool(forKey: clearOnExitKey)
+        }
+        
+        if defaults.object(forKey: globalShortcutKeyCodeKey) == nil {
+            self.globalShortcutKeyCode = 37 // L
+            defaults.set(37, forKey: globalShortcutKeyCodeKey)
+        } else {
+            self.globalShortcutKeyCode = UInt32(defaults.integer(forKey: globalShortcutKeyCodeKey))
+        }
+        
+        if defaults.object(forKey: globalShortcutModifiersKey) == nil {
+            // optionKey | shiftKey = 2048 | 512 = 2560
+            let defaultMods: UInt32 = 2560 // 2048 + 512
+            self.globalShortcutModifiers = defaultMods
+            defaults.set(Int(defaultMods), forKey: globalShortcutModifiersKey)
+        } else {
+            self.globalShortcutModifiers = UInt32(defaults.integer(forKey: globalShortcutModifiersKey))
         }
     }
 }

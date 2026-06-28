@@ -40,7 +40,9 @@ class AnnotationRenderer {
         shadow.shadowColor = NSColor.black.withAlphaComponent(0.3)
         shadow.shadowOffset = NSSize(width: 0, height: -2)
         shadow.shadowBlurRadius = 4
-        shadow.set()
+        if annotation.type != .text {
+            shadow.set()
+        }
         
         if annotation.type == .text {
             if let text = annotation.text, let rect = annotation.textRect {
@@ -94,7 +96,21 @@ class AnnotationRenderer {
                 for (i, handle) in handles.enumerated() {
                     let handleSize: CGFloat = 12.0
                     let rect = NSRect(x: handle.x - handleSize/2, y: handle.y - handleSize/2, width: handleSize, height: handleSize)
-                    let path = NSBezierPath(ovalIn: rect) // Always circles
+                    let path: NSBezierPath
+                    if annotation.type == .text && i == 2 {
+                        // Scale handle (bottom-right) as a diamond
+                        let size: CGFloat = 10.0
+                        let cx = handle.x
+                        let cy = handle.y
+                        path = NSBezierPath()
+                        path.move(to: CGPoint(x: cx, y: cy + size/2)) // Top
+                        path.line(to: CGPoint(x: cx + size/2, y: cy)) // Right
+                        path.line(to: CGPoint(x: cx, y: cy - size/2)) // Bottom
+                        path.line(to: CGPoint(x: cx - size/2, y: cy)) // Left
+                        path.close()
+                    } else {
+                        path = NSBezierPath(ovalIn: rect)
+                    }
                     
                     path.lineWidth = 1.5
                     path.fill()

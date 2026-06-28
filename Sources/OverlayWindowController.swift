@@ -72,6 +72,39 @@ class OverlayWindowController: NSWindowController, NSWindowDelegate {
         ])
         
         toolbarHostingView.isHidden = true
+        
+        // Setup Clear Prompt (centered)
+        let clearPrompt = ClearPromptView(
+            onClear: { [weak self] in
+                self?.clearCanvas()
+                self?.hideClearPrompt()
+            },
+            onCancel: { [weak self] in
+                self?.hideClearPrompt()
+            }
+        )
+        clearPromptHostingView = NSHostingView(rootView: clearPrompt)
+        clearPromptHostingView.translatesAutoresizingMaskIntoConstraints = false
+    }
+    
+    private var clearPromptHostingView: NSHostingView<ClearPromptView>!
+    
+    func showClearPrompt() {
+        guard let contentView = window?.contentView else { return }
+        if clearPromptHostingView.superview == nil {
+            contentView.addSubview(clearPromptHostingView)
+            NSLayoutConstraint.activate([
+                clearPromptHostingView.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
+                clearPromptHostingView.centerYAnchor.constraint(equalTo: contentView.centerYAnchor)
+            ])
+        }
+        clearPromptHostingView.isHidden = false
+    }
+    
+    func hideClearPrompt() {
+        clearPromptHostingView.isHidden = true
+        clearPromptHostingView.removeFromSuperview()
+        canvasView.window?.makeFirstResponder(canvasView)
     }
     
     func toggleOverlay() {
@@ -84,7 +117,7 @@ class OverlayWindowController: NSWindowController, NSWindowDelegate {
             window.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
             toolbarHostingView.isHidden = false
-            canvasView.becomeFirstResponder()
+            window.makeFirstResponder(canvasView)
         } else {
             window.ignoresMouseEvents = true
             toolbarHostingView.isHidden = true
@@ -105,5 +138,83 @@ class OverlayWindowController: NSWindowController, NSWindowDelegate {
     
     func undoLast() {
         canvasView.undo()
+    }
+}
+
+struct ClearPromptView: View {
+    let onClear: () -> Void
+    let onCancel: () -> Void
+    
+    @State private var focusedButton: Int = 1 // 0 for Clear, 1 for Cancel
+    @State private var eventMonitor: Any?
+    
+    var body: some View {
+        VStack(spacing: 16) {
+            Text("Clear all annotations?")
+                .font(.headline)
+                .foregroundColor(.primary)
+            
+            Text("This action cannot be undone.")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+            
+            HStack(spacing: 12) {
+                Button(action: onCancel) {
+                    Text("Cancel")
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 6)
+                }
+                .buttonStyle(BorderedButtonStyle())
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .stroke(Color.accentColor, lineWidth: focusedButton == 1 ? 2 : 0)
+                )
+                
+                Button(action: onClear) {
+                    Text("Clear")
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 6)
+                }
+                .buttonStyle(BorderedProminentButtonStyle())
+                .tint(.red)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .stroke(Color.accentColor, lineWidth: focusedButton == 0 ? 2 : 0)
+                )
+            }
+            .padding(.top, 8)
+        }
+        .padding(24)
+        .frame(width: 320)
+        .background(
+            VisualEffectView(material: .popover, blendingMode: .behindWindow)
+                .clipShape(RoundedRectangle(cornerRadius: 16))
+                .shadow(color: Color.black.opacity(0.15), radius: 20, x: 0, y: 10)
+        )
+        .onAppear {
+            eventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+                if event.keyCode == 123 || event.keyCode == 124 { // Left or Right arrow
+                    focusedButton = (focusedButton == 0) ? 1 : 0
+                    return nil
+                } else if event.keyCode == 36 { // Enter
+                    if focusedButton == 0 {
+                        onClear()
+                    } else {
+                        onCancel()
+                    }
+                    return nil
+                } else if event.keyCode == 53 { // Escape
+                    onCancel()
+                    return nil
+                }
+                return event
+            }
+        }
+        .onDisappear {
+            if let monitor = eventMonitor {
+                NSEvent.removeMonitor(monitor)
+                eventMonitor = nil
+            }
+        }
     }
 }

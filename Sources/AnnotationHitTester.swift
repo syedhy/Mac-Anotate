@@ -147,17 +147,20 @@ struct AnnotationHitTester {
             let rect: CGRect
             if annotation.type == .text {
                 guard let r = annotation.textRect else { return nil }
-                rect = r
+                return [
+                    CGPoint(x: r.minX, y: r.midY), // 0: left
+                    CGPoint(x: r.maxX, y: r.midY), // 1: right
+                    CGPoint(x: r.maxX, y: r.minY)  // 2: bottom-right (scale)
+                ]
             } else {
                 guard let r = annotation.rect else { return nil }
-                rect = r
+                return [
+                    CGPoint(x: r.minX, y: r.minY),
+                    CGPoint(x: r.maxX, y: r.minY),
+                    CGPoint(x: r.minX, y: r.maxY),
+                    CGPoint(x: r.maxX, y: r.maxY)
+                ]
             }
-            return [
-                CGPoint(x: rect.minX, y: rect.minY),
-                CGPoint(x: rect.maxX, y: rect.minY),
-                CGPoint(x: rect.minX, y: rect.maxY),
-                CGPoint(x: rect.maxX, y: rect.maxY)
-            ]
         case .pen, .laser:
             guard !annotation.points.isEmpty else { return nil }
             var minX = annotation.points[0].x

@@ -8,14 +8,12 @@ class HotkeyManager {
     
     private var hotKeyRef: EventHotKeyRef?
     
-    // Option + Shift + L
-    // keyCode for 'L' is 37 (kVK_ANSI_L)
-    private let defaultKeyCode: UInt32 = 37
-    private let defaultModifiers: UInt32 = UInt32(optionKey | shiftKey)
-    
     private init() {}
     
     func registerGlobalHotkey() {
+        // Unregister first if already registered
+        unregisterGlobalHotkey()
+        
         var hotKeyID = EventHotKeyID()
         hotKeyID.signature = fourCharCode("ANOT")
         hotKeyID.id = 1
@@ -32,7 +30,10 @@ class HotkeyManager {
         
         InstallEventHandler(GetApplicationEventTarget(), handler, 1, &eventType, nil, nil)
         
-        let status = RegisterEventHotKey(defaultKeyCode, defaultModifiers, hotKeyID, GetApplicationEventTarget(), 0, &hotKeyRef)
+        let keyCode = SettingsStore.shared.globalShortcutKeyCode
+        let modifiers = SettingsStore.shared.globalShortcutModifiers
+        
+        let status = RegisterEventHotKey(keyCode, modifiers, hotKeyID, GetApplicationEventTarget(), 0, &hotKeyRef)
         
         if status != noErr {
             print("Error registering global hotkey: \(status)")

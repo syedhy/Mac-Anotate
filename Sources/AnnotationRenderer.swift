@@ -2,13 +2,14 @@ import Cocoa
 
 class AnnotationRenderer {
     
-    static func draw(_ annotations: [Annotation], in context: CGContext, isDragging: Bool = false, hoveredID: UUID? = nil) {
+    static func draw(_ annotations: [Annotation], in context: CGContext, isDragging: Bool = false, isResizing: Bool = false, hoveredID: UUID? = nil, marqueeRect: CGRect? = nil) {
         let now = Date()
         
         for annotation in annotations {
-            let isHovered = (annotation.id == hoveredID)
-            let isSelected = (SelectionManager.shared.selectedAnnotationID == annotation.id)
+            let isHovered = (annotation.id == hoveredID) || SelectionManager.shared.selectedAnnotationIDs.contains(annotation.id)
+            let isSelected = SelectionManager.shared.selectedAnnotationIDs.contains(annotation.id)
             let isDraggingThis = isDragging && isSelected
+            let isResizingThis = isResizing && isSelected
             
             var color = annotation.color
             if isHovered && !isSelected {
@@ -24,32 +25,93 @@ class AnnotationRenderer {
                 let alpha = max(0, min(1.0, CGFloat(timeLeft / 0.5)))
                 
                 let fadedColor = color.withAlphaComponent(alpha)
-                drawAnnotation(annotation, color: fadedColor, in: context, isDragging: isDraggingThis)
+                drawAnnotation(annotation, color: fadedColor, in: context, isDragging: isDraggingThis, isResizing: isResizingThis)
             } else {
-                drawAnnotation(annotation, color: color, in: context, isDragging: isDraggingThis)
+                drawAnnotation(annotation, color: color, in: context, isDragging: isDraggingThis, isResizing: isResizingThis)
+            }
+        }
+        
+        if let marquee = marqueeRect {
+            context.saveGState()
+            context.setFillColor(NSColor.systemBlue.withAlphaComponent(0.2).cgColor)
+            context.fill(marquee)
+            context.setStrokeColor(NSColor.systemBlue.cgColor)
+            context.setLineWidth(1.0)
+            context.stroke(marquee)
+            context.restoreGState()
+        }
+        
+        if !isDragging && SelectionManager.shared.selectedAnnotationIDs.count > 1 {
+            if let groupBB = AnnotationHitTester.getGroupBoundingBox(for: annotations, selectedIDs: SelectionManager.shared.selectedAnnotationIDs) {
+                
+                NSGraphicsContext.saveGraphicsState()
+                
+                // Draw thin dashed outline for the group bounding box
+                let outlineBB = groupBB.insetBy(dx: -4, dy: -4)
+                let outlinePath = NSBezierPath(rect: outlineBB)
+                NSColor.systemBlue.withAlphaComponent(0.5).setStroke()
+                outlinePath.lineWidth = 1.0
+                let dashPattern: [CGFloat] = [4.0, 4.0]
+                outlinePath.setLineDash(dashPattern, count: 2, phase: 0)
+                outlinePath.stroke()
+                
+                NSGraphicsContext.restoreGraphicsState()
+                
+                let handle = CGPoint(x: outlineBB.maxX, y: outlineBB.maxY)
+                
+                NSGraphicsContext.saveGraphicsState()
+                
+                NSColor.white.setFill()
+                NSColor.systemBlue.setStroke()
+                
+                let handleShadow = NSShadow()
+                handleShadow.shadowColor = NSColor.black.withAlphaComponent(0.2)
+                handleShadow.shadowOffset = NSSize(width: 0, height: -1)
+                handleShadow.shadowBlurRadius = 2
+                handleShadow.set()
+                
+                let path = NSBezierPath(ovalIn: CGRect(x: handle.x - 5, y: handle.y - 5, width: 10, height: 10))
+                path.fill()
+                
+                NSGraphicsContext.current?.cgContext.setShadow(offset: .zero, blur: 0, color: nil)
+                
+                path.lineWidth = 1.5
+                path.stroke()
+                
+                NSGraphicsContext.restoreGraphicsState()
             }
         }
     }
     
-    private static func drawAnnotation(_ annotation: Annotation, color: NSColor, in context: CGContext, isDragging: Bool) {
+    private static func drawAnnotation(_ annotation: Annotation, color: NSColor, in context: CGContext, isDragging: Bool, isResizing: Bool) {
         NSGraphicsContext.saveGraphicsState()
         let nsContext = NSGraphicsContext(cgContext: context, flipped: false)
         NSGraphicsContext.current = nsContext
         
-        // Add subtle shadow
+        let isSelected = SelectionManager.shared.selectedAnnotationIDs.contains(annotation.id)
+        let isGroupSelected = isSelected && SelectionManager.shared.selectedAnnotationIDs.count > 1
+        
+        // Add subtle shadow or glow if selected as a group
         let shadow = NSShadow()
-        shadow.shadowColor = NSColor.black.withAlphaComponent(0.3)
-        shadow.shadowOffset = NSSize(width: 0, height: -2)
-        shadow.shadowBlurRadius = 4
-        if annotation.type != .text {
+        if isGroupSelected {
+            shadow.shadowColor = NSColor.systemBlue.withAlphaComponent(0.8)
+            shadow.shadowOffset = .zero
+            shadow.shadowBlurRadius = 12
+        } else {
+            shadow.shadowColor = NSColor.black.withAlphaComponent(0.3)
+            shadow.shadowOffset = NSSize(width: 0, height: -2)
+            shadow.shadowBlurRadius = 4
+        }
+        
+        if annotation.type != .text || isGroupSelected {
             shadow.set()
         }
         
         if annotation.type == .text {
             if let text = annotation.text, let rect = annotation.textRect {
-                if isDragging {
+                if isResizing {
                     let highlightPath = NSBezierPath(roundedRect: rect.insetBy(dx: -12, dy: -12), xRadius: 8, yRadius: 8)
-                    color.withAlphaComponent(0.25).setFill()
+                    color.withAlphaComponent(0.15).setFill()
                     highlightPath.fill()
                     
                     color.withAlphaComponent(0.6).setStroke()
@@ -112,8 +174,9 @@ class AnnotationRenderer {
             path2.stroke()
         }
         
-        if !isDragging && SelectionManager.shared.selectedAnnotationID == annotation.id {
-            if let handles = AnnotationHitTester.getHandles(for: annotation) {
+        if !isDragging && SelectionManager.shared.selectedAnnotationIDs.contains(annotation.id) {
+            if SelectionManager.shared.selectedAnnotationIDs.count == 1 {
+                if let handles = AnnotationHitTester.getHandles(for: annotation) {
                 NSColor.white.setFill()
                 NSColor.systemBlue.setStroke()
                 
@@ -147,6 +210,7 @@ class AnnotationRenderer {
                     path.fill()
                     path.stroke()
                 }
+            }
             }
         }
         

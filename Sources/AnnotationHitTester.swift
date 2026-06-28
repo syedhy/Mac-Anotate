@@ -193,6 +193,53 @@ struct AnnotationHitTester {
         let proj = CGPoint(x: a.x + t * (b.x - a.x), y: a.y + t * (b.y - a.y))
         return p.distance(to: proj)
     }
+
+    static func getBoundingBox(for annotation: Annotation) -> CGRect {
+        switch annotation.type {
+        case .rectangle, .oval:
+            return annotation.rect ?? .zero
+        case .arrow:
+            guard let start = annotation.arrowStart, let end = annotation.arrowEnd else { return .zero }
+            let cp = annotation.arrowControlPoint ?? CGPoint(x: (start.x + end.x) / 2, y: (start.y + end.y) / 2)
+            let minX = min(start.x, min(end.x, cp.x))
+            let maxX = max(start.x, max(end.x, cp.x))
+            let minY = min(start.y, min(end.y, cp.y))
+            let maxY = max(start.y, max(end.y, cp.y))
+            return CGRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)
+        case .pen, .laserPen:
+            guard !annotation.points.isEmpty else { return .zero }
+            var minX = annotation.points[0].x
+            var minY = annotation.points[0].y
+            var maxX = annotation.points[0].x
+            var maxY = annotation.points[0].y
+            for p in annotation.points {
+                if p.x < minX { minX = p.x }
+                if p.x > maxX { maxX = p.x }
+                if p.y < minY { minY = p.y }
+                if p.y > maxY { maxY = p.y }
+            }
+            return CGRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)
+        case .text:
+            return annotation.textRect ?? .zero
+        default:
+            return .zero
+        }
+    }
+    
+    static func getGroupBoundingBox(for annotations: [Annotation], selectedIDs: Set<UUID>) -> CGRect? {
+        var unionRect: CGRect?
+        for id in selectedIDs {
+            if let ann = annotations.first(where: { $0.id == id }) {
+                let bb = getBoundingBox(for: ann)
+                if let existing = unionRect {
+                    unionRect = existing.union(bb)
+                } else {
+                    unionRect = bb
+                }
+            }
+        }
+        return unionRect
+    }
 }
 
 extension CGPoint {

@@ -24,6 +24,27 @@ class RoughPathGenerator {
         }
     }
     
+    static func smoothPointsChaikin(_ points: [CGPoint], iterations: Int) -> [CGPoint] {
+        guard points.count > 2 else { return points }
+        var currentPoints = points
+        
+        for _ in 0..<iterations {
+            var newPoints = [currentPoints[0]]
+            for i in 0..<(currentPoints.count - 1) {
+                let p0 = currentPoints[i]
+                let p1 = currentPoints[i+1]
+                let q = CGPoint(x: 0.75 * p0.x + 0.25 * p1.x, y: 0.75 * p0.y + 0.25 * p1.y)
+                let r = CGPoint(x: 0.25 * p0.x + 0.75 * p1.x, y: 0.25 * p0.y + 0.75 * p1.y)
+                newPoints.append(q)
+                newPoints.append(r)
+            }
+            newPoints.append(currentPoints.last!)
+            currentPoints = newPoints
+        }
+        
+        return currentPoints
+    }
+    
     static func generateDoodlePath(from annotation: Annotation, pass: Int) -> NSBezierPath {
         let path = NSBezierPath()
         var random = SeededRandom(seed: annotation.roughnessSeed &+ UInt32(pass * 4200))

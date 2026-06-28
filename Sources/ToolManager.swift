@@ -10,7 +10,6 @@ enum ToolType: String, CaseIterable {
     case text
     case laserPointer
     case laserPen
-    
     var iconName: String {
         switch self {
         case .select: return "cursorarrow"

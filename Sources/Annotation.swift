@@ -54,4 +54,33 @@ struct Annotation: Identifiable {
         let scale = length / 150.0
         return min(strokeWidth * 1.5, max(strokeWidth * 0.5, strokeWidth * scale))
     }
+    
+    mutating func scale(by factor: CGFloat, origin: CGPoint) {
+        func scalePoint(_ p: CGPoint) -> CGPoint {
+            return CGPoint(x: origin.x + (p.x - origin.x) * factor,
+                           y: origin.y + (p.y - origin.y) * factor)
+        }
+        
+        func scaleRect(_ r: CGRect) -> CGRect {
+            let newOrigin = scalePoint(r.origin)
+            let newSize = CGSize(width: r.width * factor, height: r.height * factor)
+            return CGRect(origin: newOrigin, size: newSize)
+        }
+        
+        self.strokeWidth *= factor
+        self.fontSize *= factor
+        
+        switch type {
+        case .arrow:
+            if let s = arrowStart { arrowStart = scalePoint(s) }
+            if let e = arrowEnd { arrowEnd = scalePoint(e) }
+            if let c = arrowControlPoint { arrowControlPoint = scalePoint(c) }
+        case .rectangle, .oval:
+            if let r = rect { rect = scaleRect(r) }
+        case .text:
+            if let r = textRect { textRect = scaleRect(r) }
+        default:
+            points = points.map(scalePoint)
+        }
+    }
 }

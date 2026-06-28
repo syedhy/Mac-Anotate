@@ -1,6 +1,10 @@
 import Cocoa
 import SwiftUI
 
+enum ToolbarEdge: String, Codable {
+    case top, bottom, left, right
+}
+
 class SettingsStore: ObservableObject {
     static let shared = SettingsStore()
     
@@ -11,10 +15,17 @@ class SettingsStore: ObservableObject {
     private let clearOnExitKey = "clearOnExit"
     private let globalShortcutKeyCodeKey = "globalShortcutKeyCode"
     private let globalShortcutModifiersKey = "globalShortcutModifiers"
+    private let toolbarEdgeKey = "toolbarEdge"
     
     @Published var lastSelectedColor: NSColor {
         didSet {
             defaults.set(lastSelectedColor.hexString, forKey: colorKey)
+        }
+    }
+    
+    @Published var toolbarEdge: ToolbarEdge {
+        didSet {
+            defaults.set(toolbarEdge.rawValue, forKey: toolbarEdgeKey)
         }
     }
     
@@ -23,6 +34,8 @@ class SettingsStore: ObservableObject {
             defaults.set(Double(lastSelectedStrokeWidth), forKey: strokeWidthKey)
         }
     }
+    
+    @Published var isToolbarHidden: Bool = false
     
     private let fillStyleKey = "lastSelectedFillStyle"
     
@@ -71,6 +84,12 @@ class SettingsStore: ObservableObject {
             defaults.set(true, forKey: clearOnExitKey)
         } else {
             self.clearOnExit = defaults.bool(forKey: clearOnExitKey)
+        }
+        
+        if let savedString = defaults.string(forKey: toolbarEdgeKey), let edge = ToolbarEdge(rawValue: savedString) {
+            self.toolbarEdge = edge
+        } else {
+            self.toolbarEdge = .top
         }
         
         if defaults.object(forKey: globalShortcutKeyCodeKey) == nil {

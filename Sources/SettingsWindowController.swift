@@ -119,23 +119,17 @@ struct SettingsView: View {
                             Divider()
                             
                             VStack(alignment: .leading, spacing: 12) {
-                                Text("Default Stroke Width:")
-                                
-                                HStack(spacing: 16) {
-                                    ForEach(strokeWidths, id: \.name) { style in
-                                        Button(action: {
-                                            settings.lastSelectedStrokeWidth = style.width
-                                        }) {
-                                            Text(style.name)
-                                                .padding(.horizontal, 12)
-                                                .padding(.vertical, 6)
-                                                .background(settings.lastSelectedStrokeWidth == style.width ? Color.accentColor : Color.secondary.opacity(0.1))
-                                                .foregroundColor(settings.lastSelectedStrokeWidth == style.width ? .white : .primary)
-                                                .cornerRadius(6)
-                                        }
-                                        .buttonStyle(PlainButtonStyle())
-                                    }
+                                HStack {
+                                    Text("Default Stroke Width:")
+                                    Spacer()
+                                    Text(String(format: "%.0f", settings.lastSelectedStrokeWidth))
+                                        .font(.system(size: 14, weight: .bold, design: .rounded))
+                                        .foregroundColor(.secondary)
                                 }
+                                
+                                TaperedStrokeSlider(value: $settings.lastSelectedStrokeWidth, isVertical: false)
+                                    .frame(height: 32)
+                                    .padding(.horizontal, 10)
                             }
                         }
                         .padding(16)

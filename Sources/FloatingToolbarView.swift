@@ -3,6 +3,7 @@ import SwiftUI
 struct CustomTooltipModifier: ViewModifier {
     let text: String
     @State private var isHovered = false
+    @ObservedObject var settings = SettingsStore.shared
     
     func body(content: Content) -> some View {
         content
@@ -34,12 +35,16 @@ struct CustomTooltipModifier: ViewModifier {
                             )
                             .shadow(color: .black.opacity(0.15), radius: 6, y: 3)
                             .fixedSize()
-                            .offset(y: 38)
+                            .offset(
+                                x: settings.toolbarEdge == .left ? 64 : (settings.toolbarEdge == .right ? -64 : 0),
+                                y: (settings.toolbarEdge == .top || settings.toolbarEdge == .bottom) ? 38 : 0
+                            )
                             .transition(.opacity)
                             .zIndex(100)
+                            .allowsHitTesting(false)
                     }
                 }
-                , alignment: .bottom
+                , alignment: .center
             )
     }
 }
@@ -66,8 +71,52 @@ struct FloatingToolbarView: View {
         .black
     ]
     
+    @State private var dragOffset = CGSize.zero
+    @State private var isDragging: Bool = false
+    @State private var wasToolbarBeforeDrag: Bool = false
+    
+    private var isVertical: Bool {
+        settings.toolbarEdge == .left || settings.toolbarEdge == .right
+    }
+    
+    @ViewBuilder
+    func orientationDivider() -> some View {
+        if isVertical {
+            Divider().frame(width: 24)
+        } else {
+            Divider().frame(height: 24)
+        }
+    }
+    
     var body: some View {
-        HStack(spacing: 12) {
+        Group {
+            if settings.isToolbarHidden {
+                // Compact Pill
+                Image(systemName: "pawprint.fill")
+                    .font(.system(size: 20))
+                    .foregroundColor(.primary)
+                    .frame(width: 48, height: 48)
+                    .contentShape(Circle())
+                    .background(
+                        VisualEffectView(material: .hudWindow, blendingMode: .behindWindow)
+                            .clipShape(Circle())
+                            .overlay(Circle().stroke(Color.white.opacity(0.2), lineWidth: 1))
+                            .shadow(color: Color.black.opacity(0.2), radius: 10, x: 0, y: 5)
+                    )
+                    .onTapGesture {
+                        settings.isToolbarHidden = false
+                    }
+            } else {
+                // Full Toolbar
+                let layout = isVertical ? AnyLayout(VStackLayout(spacing: 12)) : AnyLayout(HStackLayout(spacing: 12))
+                let innerLayout = isVertical ? AnyLayout(VStackLayout(spacing: 8)) : AnyLayout(HStackLayout(spacing: 8))
+                
+                layout {
+            // Drag Handle
+            DragHandleView(isVertical: isVertical)
+                .padding(.horizontal, isVertical ? 0 : 4)
+                .padding(.vertical, isVertical ? 4 : 0)
+            
             // Tools
             ForEach(ToolType.allCases, id: \.self) { tool in
                 ToolButton(tool: tool, isActive: toolManager.activeTool == tool) {
@@ -76,11 +125,10 @@ struct FloatingToolbarView: View {
                 .customTooltip("\(tool.name) (\(tool.keyEquivalent))")
             }
             
-            Divider()
-                .frame(height: 24)
+            orientationDivider()
             
             // Colors
-            HStack(spacing: 8) {
+            innerLayout {
                 ForEach(colors, id: \.self) { color in
                     Circle()
                         .fill(Color(nsColor: color))
@@ -96,11 +144,10 @@ struct FloatingToolbarView: View {
                 }
             }
             
-            Divider()
-                .frame(height: 24)
+            orientationDivider()
             
             // Stroke Width
-            HStack(spacing: 8) {
+            innerLayout {
                 Image(systemName: "lineweight")
                     .foregroundColor(.secondary)
                     .font(.system(size: 14))
@@ -108,13 +155,12 @@ struct FloatingToolbarView: View {
                 TaperedStrokeSlider(value: Binding(
                     get: { settings.lastSelectedStrokeWidth },
                     set: { settings.lastSelectedStrokeWidth = $0 }
-                ), range: 1...50)
-                .frame(width: 80)
+                ), range: 2...22, isVertical: isVertical)
+                .frame(width: isVertical ? 20 : 80, height: isVertical ? 80 : 20)
             }
             .customTooltip("Stroke Width")
             
-            Divider()
-                .frame(height: 24)
+            orientationDivider()
                 
             // Fill Style
             Menu {
@@ -157,8 +203,7 @@ struct FloatingToolbarView: View {
             .frame(width: 40)
             .customTooltip("Fill Style")
             
-            Divider()
-                .frame(height: 24)
+            orientationDivider()
             
             // Actions
             Button(action: {
@@ -182,6 +227,17 @@ struct FloatingToolbarView: View {
             .customTooltip("Clear (C)")
             
             Button(action: {
+                settings.isToolbarHidden = true
+            }) {
+                Image(systemName: "eye.slash.fill")
+                    .foregroundColor(.primary)
+                    .frame(width: 32, height: 32)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(PlainButtonStyle())
+            .customTooltip("Hide Toolbar (H)")
+            
+            Button(action: {
                 overlayController?.toggleOverlay()
             }) {
                 Image(systemName: "xmark.circle.fill")
@@ -192,18 +248,69 @@ struct FloatingToolbarView: View {
             .buttonStyle(PlainButtonStyle())
             .customTooltip("Close (Esc)")
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 12)
+        .padding(.horizontal, isVertical ? 12 : 20)
+        .padding(.vertical, isVertical ? 20 : 12)
         .background(
             VisualEffectView(material: .hudWindow, blendingMode: .behindWindow)
                 .clipShape(Capsule())
                 .overlay(Capsule().stroke(Color.white.opacity(0.2), lineWidth: 1))
                 .shadow(color: Color.black.opacity(0.2), radius: 15, x: 0, y: 8)
         )
+            } // Close else
+        } // Close Group
+        .gesture(
+            DragGesture(minimumDistance: 5, coordinateSpace: .global)
+                .onChanged { _ in
+                    if !isDragging {
+                        isDragging = true
+                        wasToolbarBeforeDrag = !settings.isToolbarHidden
+                        
+                        if wasToolbarBeforeDrag {
+                            settings.isToolbarHidden = true
+                            overlayController?.beginToolbarDrag(convertingToPill: true)
+                        } else {
+                            overlayController?.beginToolbarDrag(convertingToPill: false)
+                        }
+                    }
+                    overlayController?.updateToolbarDrag()
+                }
+                .onEnded { _ in
+                    if wasToolbarBeforeDrag {
+                        settings.isToolbarHidden = false
+                    }
+                    isDragging = false
+                    wasToolbarBeforeDrag = false
+                    overlayController?.snapToNearestEdge()
+                }
+        )
         // Ensure SwiftUI handles mouse clicks properly on the Mac transparent window
         .onHover { _ in NSCursor.arrow.push() }
     }
 }
+
+struct DragHandleView: View {
+    var isVertical: Bool
+    
+    var body: some View {
+        HStack(spacing: 4) {
+            VStack(spacing: 4) {
+                Circle().frame(width: 3, height: 3)
+                Circle().frame(width: 3, height: 3)
+                Circle().frame(width: 3, height: 3)
+            }
+            VStack(spacing: 4) {
+                Circle().frame(width: 3, height: 3)
+                Circle().frame(width: 3, height: 3)
+                Circle().frame(width: 3, height: 3)
+            }
+        }
+        .foregroundColor(.secondary.opacity(0.6))
+        .rotationEffect(.degrees(isVertical ? 90 : 0))
+        .frame(width: isVertical ? 24 : 14, height: isVertical ? 14 : 24)
+        .contentShape(Rectangle()) // Make it easily grabbable
+    }
+}
+
 // Helper to use NSVisualEffectView in SwiftUI
 struct VisualEffectView: NSViewRepresentable {
     var material: NSVisualEffectView.Material
@@ -246,8 +353,9 @@ struct ToolButton: View {
 
 struct TaperedStrokeSlider: View {
     @Binding var value: CGFloat
-    var range: ClosedRange<CGFloat> = 1...50
+    var range: ClosedRange<CGFloat> = 2...22
     var activeColor: Color = .accentColor
+    var isVertical: Bool = false
     var onEditingChanged: ((Bool) -> Void)? = nil
     
     @State private var isDragging: Bool = false
@@ -257,60 +365,136 @@ struct TaperedStrokeSlider: View {
             let w = geometry.size.width
             let h = geometry.size.height
             let minThickness: CGFloat = 2.0
-            let maxThickness: CGFloat = h * 0.8
             
-            ZStack(alignment: .leading) {
-                // Background Track
-                Path { path in
-                    path.move(to: CGPoint(x: 0, y: h/2 - minThickness/2))
-                    path.addLine(to: CGPoint(x: w, y: h/2 - maxThickness/2))
-                    path.addArc(center: CGPoint(x: w, y: h/2), radius: maxThickness/2, startAngle: .degrees(-90), endAngle: .degrees(90), clockwise: false)
-                    path.addLine(to: CGPoint(x: 0, y: h/2 + minThickness/2))
-                    path.addArc(center: CGPoint(x: 0, y: h/2), radius: minThickness/2, startAngle: .degrees(90), endAngle: .degrees(-90), clockwise: false)
-                    path.closeSubpath()
-                }
-                .fill(Color.primary.opacity(0.4))
+            if isVertical {
+                let maxThickness: CGFloat = w * 0.8
+                let progress = max(0, min(1, (value - range.lowerBound) / (range.upperBound - range.lowerBound)))
+                let activeHeight = h * progress
+                let activeThickness = minThickness + (maxThickness - minThickness) * progress
                 
-                // Active Track
+                ZStack(alignment: .top) {
+                    // Background Track
+                    Path { path in
+                        path.move(to: CGPoint(x: w/2 - minThickness/2, y: 0))
+                        path.addLine(to: CGPoint(x: w/2 - maxThickness/2, y: h))
+                        path.addArc(center: CGPoint(x: w/2, y: h), radius: maxThickness/2, startAngle: .degrees(180), endAngle: .degrees(0), clockwise: true)
+                        path.addLine(to: CGPoint(x: w/2 + minThickness/2, y: 0))
+                        path.addArc(center: CGPoint(x: w/2, y: 0), radius: minThickness/2, startAngle: .degrees(0), endAngle: .degrees(180), clockwise: true)
+                        path.closeSubpath()
+                    }
+                    .fill(Color.primary.opacity(0.4))
+                    
+                    // Active Track
+                    Path { path in
+                        path.move(to: CGPoint(x: w/2 - minThickness/2, y: 0))
+                        path.addLine(to: CGPoint(x: w/2 - activeThickness/2, y: activeHeight))
+                        path.addArc(center: CGPoint(x: w/2, y: activeHeight), radius: activeThickness/2, startAngle: .degrees(180), endAngle: .degrees(0), clockwise: true)
+                        path.addLine(to: CGPoint(x: w/2 + minThickness/2, y: 0))
+                        path.addArc(center: CGPoint(x: w/2, y: 0), radius: minThickness/2, startAngle: .degrees(0), endAngle: .degrees(180), clockwise: true)
+                        path.closeSubpath()
+                    }
+                    .fill(activeColor)
+                    
+                    // Thumb
+                    Circle()
+                        .fill(Color.white)
+                        .shadow(color: Color.black.opacity(0.2), radius: 2, x: 0, y: 1)
+                        .overlay(Circle().stroke(Color.gray.opacity(0.2), lineWidth: 0.5))
+                        .overlay(
+                            Text(String(format: "%.0f", value))
+                                .font(.system(size: 11, weight: .bold, design: .rounded))
+                                .foregroundColor(.primary)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Capsule().fill(Color(nsColor: .windowBackgroundColor)).shadow(radius: 2))
+                                .offset(x: -30)
+                                .opacity(isDragging ? 1 : 0)
+                                .animation(.easeInOut(duration: 0.1), value: isDragging)
+                        )
+                        .frame(width: w, height: w)
+                        .offset(y: activeHeight - w/2)
+                        .gesture(
+                            DragGesture(minimumDistance: 0)
+                                .onChanged { gesture in
+                                    if !isDragging {
+                                        isDragging = true
+                                        onEditingChanged?(true)
+                                    }
+                                    let p = gesture.location.y / h
+                                    let clamped = max(0, min(1, p))
+                                    value = range.lowerBound + clamped * (range.upperBound - range.lowerBound)
+                                }
+                                .onEnded { _ in
+                                    isDragging = false
+                                    onEditingChanged?(false)
+                                }
+                        )
+                }
+            } else {
+                let maxThickness: CGFloat = h * 0.8
                 let progress = max(0, min(1, (value - range.lowerBound) / (range.upperBound - range.lowerBound)))
                 let activeWidth = w * progress
                 let activeThickness = minThickness + (maxThickness - minThickness) * progress
                 
-                Path { path in
-                    path.move(to: CGPoint(x: 0, y: h/2 - minThickness/2))
-                    path.addLine(to: CGPoint(x: activeWidth, y: h/2 - activeThickness/2))
-                    path.addArc(center: CGPoint(x: activeWidth, y: h/2), radius: activeThickness/2, startAngle: .degrees(-90), endAngle: .degrees(90), clockwise: false)
-                    path.addLine(to: CGPoint(x: 0, y: h/2 + minThickness/2))
-                    path.addArc(center: CGPoint(x: 0, y: h/2), radius: minThickness/2, startAngle: .degrees(90), endAngle: .degrees(-90), clockwise: false)
-                    path.closeSubpath()
-                }
-                .fill(activeColor)
-                
-                // Thumb
-                Circle()
-                    .fill(Color.white)
-                    .shadow(color: Color.black.opacity(0.2), radius: 2, x: 0, y: 1)
-                    .overlay(Circle().stroke(Color.gray.opacity(0.2), lineWidth: 0.5))
-                    .frame(width: h, height: h)
-                    .offset(x: activeWidth - h/2)
-                    .gesture(
-                        DragGesture(minimumDistance: 0)
-                            .onChanged { gesture in
-                                if !isDragging {
-                                    isDragging = true
-                                    onEditingChanged?(true)
+                ZStack(alignment: .leading) {
+                    // Background Track
+                    Path { path in
+                        path.move(to: CGPoint(x: 0, y: h/2 - minThickness/2))
+                        path.addLine(to: CGPoint(x: w, y: h/2 - maxThickness/2))
+                        path.addArc(center: CGPoint(x: w, y: h/2), radius: maxThickness/2, startAngle: .degrees(-90), endAngle: .degrees(90), clockwise: false)
+                        path.addLine(to: CGPoint(x: 0, y: h/2 + minThickness/2))
+                        path.addArc(center: CGPoint(x: 0, y: h/2), radius: minThickness/2, startAngle: .degrees(90), endAngle: .degrees(-90), clockwise: false)
+                        path.closeSubpath()
+                    }
+                    .fill(Color.primary.opacity(0.4))
+                    
+                    // Active Track
+                    Path { path in
+                        path.move(to: CGPoint(x: 0, y: h/2 - minThickness/2))
+                        path.addLine(to: CGPoint(x: activeWidth, y: h/2 - activeThickness/2))
+                        path.addArc(center: CGPoint(x: activeWidth, y: h/2), radius: activeThickness/2, startAngle: .degrees(-90), endAngle: .degrees(90), clockwise: false)
+                        path.addLine(to: CGPoint(x: 0, y: h/2 + minThickness/2))
+                        path.addArc(center: CGPoint(x: 0, y: h/2), radius: minThickness/2, startAngle: .degrees(90), endAngle: .degrees(-90), clockwise: false)
+                        path.closeSubpath()
+                    }
+                    .fill(activeColor)
+                    
+                    // Thumb
+                    Circle()
+                        .fill(Color.white)
+                        .shadow(color: Color.black.opacity(0.2), radius: 2, x: 0, y: 1)
+                        .overlay(Circle().stroke(Color.gray.opacity(0.2), lineWidth: 0.5))
+                        .overlay(
+                            Text(String(format: "%.0f", value))
+                                .font(.system(size: 11, weight: .bold, design: .rounded))
+                                .foregroundColor(.primary)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Capsule().fill(Color(nsColor: .windowBackgroundColor)).shadow(radius: 2))
+                                .offset(y: -30)
+                                .opacity(isDragging ? 1 : 0)
+                                .animation(.easeInOut(duration: 0.1), value: isDragging)
+                        )
+                        .frame(width: h, height: h)
+                        .offset(x: activeWidth - h/2)
+                        .gesture(
+                            DragGesture(minimumDistance: 0)
+                                .onChanged { gesture in
+                                    if !isDragging {
+                                        isDragging = true
+                                        onEditingChanged?(true)
+                                    }
+                                    let p = gesture.location.x / w
+                                    let clamped = max(0, min(1, p))
+                                    value = range.lowerBound + clamped * (range.upperBound - range.lowerBound)
                                 }
-                                let p = gesture.location.x / w
-                                let clamped = max(0, min(1, p))
-                                value = range.lowerBound + clamped * (range.upperBound - range.lowerBound)
-                            }
-                            .onEnded { _ in
-                                isDragging = false
-                                onEditingChanged?(false)
-                            }
-                    )
+                                .onEnded { _ in
+                                    isDragging = false
+                                    onEditingChanged?(false)
+                                }
+                        )
+                }
             }
         }
-        .frame(height: 16)
     }
 }

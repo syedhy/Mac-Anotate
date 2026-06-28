@@ -17,6 +17,7 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
     private var trackingArea: NSTrackingArea?
     private var cancellables = Set<AnyCancellable>()
     private var propertiesHostingView: NSHostingView<AnyView>!
+    private var propertiesTrailingConstraint: NSLayoutConstraint!
     
     override var acceptsFirstResponder: Bool { true }
     
@@ -48,9 +49,10 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
         propertiesHostingView.translatesAutoresizingMaskIntoConstraints = false
         self.addSubview(propertiesHostingView)
         
+        propertiesTrailingConstraint = propertiesHostingView.trailingAnchor.constraint(equalTo: self.trailingAnchor, constant: -20)
         NSLayoutConstraint.activate([
             propertiesHostingView.topAnchor.constraint(equalTo: self.topAnchor, constant: 20),
-            propertiesHostingView.trailingAnchor.constraint(equalTo: self.trailingAnchor, constant: -20)
+            propertiesTrailingConstraint
         ])
         
         let timer = Timer(timeInterval: 1.0 / 60.0, repeats: true) { [weak self] _ in
@@ -139,6 +141,12 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
             return
         }
         
+        // 'H' key to toggle toolbar visibility
+        if event.keyCode == 4 { // 'H' key
+            SettingsStore.shared.isToolbarHidden.toggle()
+            return
+        }
+        
         // Command + Z for Undo
         if characters.lowercased() == "z" && event.modifierFlags.contains(.command) {
             undo()
@@ -211,6 +219,8 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
     private var interactionState: InteractionState = .idle
     
     override func mouseMoved(with event: NSEvent) {
+        if activeTextView != nil { return }
+        
         let point = convert(event.locationInWindow, from: nil)
         var newHover: UUID? = nil
         
@@ -271,38 +281,15 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
         // If in Select mode, check hit test
         if tool == .select {
             
-            if SelectionManager.shared.selectedAnnotationIDs.count > 1 {
-                if let groupBB = AnnotationHitTester.getGroupBoundingBox(for: annotations, selectedIDs: SelectionManager.shared.selectedAnnotationIDs) {
-                    let groupHandle = CGPoint(x: groupBB.maxX, y: groupBB.maxY)
-                    
-                    var originals: [UUID: Annotation] = [:]
-                    for id in SelectionManager.shared.selectedAnnotationIDs {
-                        if let ann = annotations.first(where: { $0.id == id }) {
-                            originals[id] = ann
-                        }
-                    }
-                    
-                    if point.distance(to: groupHandle) < 10.0 {
-                        interactionState = .resizingMultipleSelection(startPoint: point, originalAnnotations: originals, groupBoundingBox: groupBB)
-                        return
-                    }
-                    
-                    if groupBB.contains(point) {
-                        interactionState = .movingSelection(startPoint: point, originalAnnotations: originals)
-                        return
-                    }
-                }
-            }
-            
-            // First check if we clicked on an already selected annotation's body or handle
-            var clickedSelected = false
+            // First check if we clicked on an already selected annotation's handles
+            var clickedSelectedBody = false
             if !SelectionManager.shared.selectedAnnotationIDs.isEmpty {
                 for selectedID in SelectionManager.shared.selectedAnnotationIDs {
                     if let index = annotations.firstIndex(where: { $0.id == selectedID }) {
                         let hit = AnnotationHitTester.hitTest(point: point, annotation: annotations[index])
                         switch hit {
                         case .resizeHandle(let idx), .controlHandle(let idx):
-                            if SelectionManager.shared.selectedAnnotationIDs.count == 1 {
+                            if SelectionManager.shared.selectedAnnotationIDs.count == 1 && !SelectionManager.shared.wasMarqueeSelected {
                                 interactionState = .resizingSelection(handleIndex: idx, startPoint: point, originalAnnotation: annotations[index])
                                 return
                             }
@@ -311,7 +298,7 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
                                 startTextEditing(existingAnnotation: annotations[index], at: index)
                                 return
                             }
-                            clickedSelected = true
+                            clickedSelectedBody = true
                         case .none:
                             break
                         }
@@ -319,16 +306,32 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
                 }
             }
             
-            if clickedSelected {
-                // Prepare original annotations for moving
-                var originals: [UUID: Annotation] = [:]
-                for id in SelectionManager.shared.selectedAnnotationIDs {
-                    if let ann = annotations.first(where: { $0.id == id }) {
-                        originals[id] = ann
+            // Then check group bounding box for resizing (multiple items) or moving
+            if !SelectionManager.shared.selectedAnnotationIDs.isEmpty {
+                if let groupBB = AnnotationHitTester.getGroupBoundingBox(for: annotations, selectedIDs: SelectionManager.shared.selectedAnnotationIDs) {
+                    
+                    var originals: [UUID: Annotation] = [:]
+                    for id in SelectionManager.shared.selectedAnnotationIDs {
+                        if let ann = annotations.first(where: { $0.id == id }) {
+                            originals[id] = ann
+                        }
+                    }
+                    
+                    let shouldShowGroupBB = SelectionManager.shared.selectedAnnotationIDs.count > 1 || (SelectionManager.shared.selectedAnnotationIDs.count == 1 && SelectionManager.shared.wasMarqueeSelected)
+                    
+                    if shouldShowGroupBB {
+                        let groupHandle = CGPoint(x: groupBB.maxX, y: groupBB.maxY)
+                        if point.distance(to: groupHandle) < 10.0 {
+                            interactionState = .resizingMultipleSelection(startPoint: point, originalAnnotations: originals, groupBoundingBox: groupBB)
+                            return
+                        }
+                    }
+                    
+                    if (shouldShowGroupBB && groupBB.contains(point)) || clickedSelectedBody {
+                        interactionState = .movingSelection(startPoint: point, originalAnnotations: originals)
+                        return
                     }
                 }
-                interactionState = .movingSelection(startPoint: point, originalAnnotations: originals)
-                return
             }
             
             // Otherwise, see if we hit another annotation body (not currently selected)
@@ -622,9 +625,17 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
             interactionState = .marqueeSelection(startPoint: startPoint, currentRect: newRect)
             
             var newlySelected: Set<UUID> = []
+            let lenientRect = newRect.insetBy(dx: -2, dy: -2) // Leniency for float precision
+            
             for annotation in annotations {
                 let bb = AnnotationHitTester.getBoundingBox(for: annotation)
-                if newRect.contains(bb) {
+                let visibleBB = bb.intersection(self.bounds)
+                let targetBB = visibleBB.isNull ? bb : visibleBB
+                
+                // We use intersects as a fallback if the shape is extremely thin or fully off-screen,
+                // but generally we expect the lenientRect to contain the targetBB.
+                // Wait, if targetBB is inside lenientRect, contains is true.
+                if lenientRect.contains(targetBB) {
                     newlySelected.insert(annotation.id)
                 }
             }
@@ -766,6 +777,7 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
         self.addSubview(textView)
         self.window?.makeFirstResponder(textView)
         activeTextView = textView
+        propertiesHostingView.isHidden = true
     }
     
 
@@ -797,6 +809,7 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
         textView.setSelectedRange(NSRange(location: textView.string.count, length: 0))
         
         activeTextView = textView
+        propertiesHostingView.isHidden = true
         self.needsDisplay = true // Redraw to hide the original annotation
         
         // Ensure proper initial size
@@ -1018,6 +1031,12 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
             return
         }
         
+        if SettingsStore.shared.toolbarEdge == .right {
+            propertiesTrailingConstraint.constant = -110
+        } else {
+            propertiesTrailingConstraint.constant = -20
+        }
+        
         guard let id = selectedIDs.first,
               let index = annotations.firstIndex(where: { $0.id == id }) else {
             propertiesHostingView.isHidden = true
@@ -1123,7 +1142,7 @@ struct SelectionPropertiesPanel: View {
                         Text("\(Int(localStrokeWidth)) pt").font(.system(size: 11)).foregroundColor(.secondary)
                     }
                     
-                    TaperedStrokeSlider(value: $localStrokeWidth, range: 1...50) { isEditing in
+                    TaperedStrokeSlider(value: $localStrokeWidth, range: 2...22) { isEditing in
                         if !isEditing {
                             onStrokeWidthChanged(localStrokeWidth)
                         }

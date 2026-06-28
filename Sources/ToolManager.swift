@@ -13,11 +13,11 @@ enum ToolType: String, CaseIterable {
     var iconName: String {
         switch self {
         case .select: return "cursorarrow"
-        case .pen: return "paintbrush.pointed"
-        case .arrow: return "arrow.up.right"
+        case .pen: return "scribble.variable"
+        case .arrow: return "location.north"
         case .rectangle: return "rectangle"
-        case .oval: return "oval"
-        case .text: return "textformat"
+        case .oval: return "circle"
+        case .text: return "character.cursor.ibeam"
         case .laserPointer: return "smallcircle.filled.circle"
         case .laserPen: return "wand.and.rays"
         }

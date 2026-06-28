@@ -41,13 +41,14 @@ class AnnotationRenderer {
             context.restoreGState()
         }
         
-        if !isDragging && SelectionManager.shared.selectedAnnotationIDs.count > 1 {
+        let shouldShowGroupBB = SelectionManager.shared.selectedAnnotationIDs.count > 1 || (SelectionManager.shared.selectedAnnotationIDs.count == 1 && SelectionManager.shared.wasMarqueeSelected)
+        if !isDragging && shouldShowGroupBB {
             if let groupBB = AnnotationHitTester.getGroupBoundingBox(for: annotations, selectedIDs: SelectionManager.shared.selectedAnnotationIDs) {
                 
                 NSGraphicsContext.saveGraphicsState()
                 
                 // Draw thin dashed outline for the group bounding box
-                let outlineBB = groupBB.insetBy(dx: -4, dy: -4)
+                let outlineBB = groupBB
                 let outlinePath = NSBezierPath(rect: outlineBB)
                 NSColor.systemBlue.withAlphaComponent(0.5).setStroke()
                 outlinePath.lineWidth = 1.0
@@ -232,7 +233,7 @@ class AnnotationRenderer {
         }
         
         if !isDragging && SelectionManager.shared.selectedAnnotationIDs.contains(annotation.id) {
-            if SelectionManager.shared.selectedAnnotationIDs.count == 1 {
+            if SelectionManager.shared.selectedAnnotationIDs.count == 1 && !SelectionManager.shared.wasMarqueeSelected {
                 if let handles = AnnotationHitTester.getHandles(for: annotation) {
                 NSColor.white.setFill()
                 NSColor.systemBlue.setStroke()

@@ -238,7 +238,7 @@ struct AnnotationHitTester {
                 }
             }
         }
-        return unionRect
+        return unionRect?.insetBy(dx: -10, dy: -10)
     }
 }
 

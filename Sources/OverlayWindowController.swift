@@ -12,6 +12,18 @@ class OverlayWindowController: NSWindowController, NSWindowDelegate {
     private var canvasView: AnnotationCanvasView!
     private var toolbarHostingView: NSHostingView<FloatingToolbarView>!
     
+    // Constraints for free dragging
+    private var toolbarLeftConstraint: NSLayoutConstraint!
+    private var toolbarTopConstraint: NSLayoutConstraint!
+    
+    // Constraints for snapped edges
+    private var snapTopConstraint: NSLayoutConstraint!
+    private var snapBottomConstraint: NSLayoutConstraint!
+    private var snapLeadingConstraint: NSLayoutConstraint!
+    private var snapTrailingConstraint: NSLayoutConstraint!
+    private var snapCenterXConstraint: NSLayoutConstraint!
+    private var snapCenterYConstraint: NSLayoutConstraint!
+    
     var isOverlayActive: Bool = false
     
     init() {
@@ -66,10 +78,20 @@ class OverlayWindowController: NSWindowController, NSWindowDelegate {
         
         contentView.addSubview(toolbarHostingView)
         
-        NSLayoutConstraint.activate([
-            toolbarHostingView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 40),
-            toolbarHostingView.centerXAnchor.constraint(equalTo: contentView.centerXAnchor)
-        ])
+        // Setup snap constraints
+        snapTopConstraint = toolbarHostingView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 40)
+        snapBottomConstraint = toolbarHostingView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -40)
+        snapLeadingConstraint = toolbarHostingView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 40)
+        snapTrailingConstraint = toolbarHostingView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -40)
+        snapCenterXConstraint = toolbarHostingView.centerXAnchor.constraint(equalTo: contentView.centerXAnchor)
+        snapCenterYConstraint = toolbarHostingView.centerYAnchor.constraint(equalTo: contentView.centerYAnchor)
+        
+        // Setup drag constraints (active during drag)
+        toolbarLeftConstraint = toolbarHostingView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 0)
+        toolbarTopConstraint = toolbarHostingView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 40)
+        
+        // Start by applying the saved edge state
+        applyEdgeConstraints(edge: SettingsStore.shared.toolbarEdge, animate: false)
         
         toolbarHostingView.isHidden = true
         
@@ -142,6 +164,125 @@ class OverlayWindowController: NSWindowController, NSWindowDelegate {
     
     func updateSelectedFillStyle(_ style: ShapeFillStyle) {
         canvasView.updateSelectedFillStyle(style)
+    }
+    
+    private var dragMouseOffset: CGSize = .zero
+    private var isDraggingToPill: Bool = false
+    
+    func beginToolbarDrag(convertingToPill: Bool) {
+        guard let window = self.window, let contentView = window.contentView else { return }
+        let mouseLoc = window.mouseLocationOutsideOfEventStream
+        
+        isDraggingToPill = convertingToPill
+        
+        if !convertingToPill {
+            // Keep the relative grab position if not changing size
+            let mouseX = mouseLoc.x
+            let mouseY = contentView.bounds.height - mouseLoc.y
+            let center = CGPoint(x: toolbarHostingView.frame.midX, 
+                                 y: contentView.bounds.height - toolbarHostingView.frame.midY)
+            dragMouseOffset = CGSize(width: center.x - mouseX, height: center.y - mouseY)
+        } else {
+            // Center the pill exactly on the mouse cursor
+            dragMouseOffset = .zero
+        }
+        
+        if !toolbarLeftConstraint.isActive {
+            let currentFrame = toolbarHostingView.frame
+            toolbarLeftConstraint.constant = currentFrame.minX
+            toolbarTopConstraint.constant = contentView.bounds.height - currentFrame.maxY
+            
+            NSLayoutConstraint.deactivate([
+                snapTopConstraint, snapBottomConstraint, snapLeadingConstraint, snapTrailingConstraint,
+                snapCenterXConstraint, snapCenterYConstraint
+            ])
+            NSLayoutConstraint.activate([toolbarLeftConstraint, toolbarTopConstraint])
+        }
+    }
+    
+    func updateToolbarDrag() {
+        guard let window = self.window, let contentView = window.contentView else { return }
+        
+        let mouseLoc = window.mouseLocationOutsideOfEventStream
+        let mouseX = mouseLoc.x
+        let mouseY = contentView.bounds.height - mouseLoc.y
+        let currentSize = toolbarHostingView.frame.size
+        
+        toolbarLeftConstraint.constant = mouseX + dragMouseOffset.width - currentSize.width / 2
+        toolbarTopConstraint.constant = mouseY + dragMouseOffset.height - currentSize.height / 2
+        
+        // Simple bounds check based on current frame size
+        guard let window = self.window, let contentView = window.contentView else { return }
+        
+        let maxX = contentView.bounds.width - currentSize.width / 2
+        let minX = -currentSize.width / 2
+        
+        if toolbarLeftConstraint.constant > maxX { toolbarLeftConstraint.constant = maxX }
+        if toolbarLeftConstraint.constant < minX { toolbarLeftConstraint.constant = minX }
+        
+        let maxY = contentView.bounds.height - currentSize.height / 2
+        let minY = -currentSize.height / 2
+        
+        if toolbarTopConstraint.constant > maxY { toolbarTopConstraint.constant = maxY }
+        if toolbarTopConstraint.constant < minY { toolbarTopConstraint.constant = minY }
+    }
+    
+    func snapToNearestEdge() {
+        guard let window = self.window, let contentView = window.contentView else { return }
+        let bounds = contentView.bounds
+        let frame = toolbarHostingView.frame
+        
+        let centerX = frame.midX
+        let centerY = frame.midY
+        
+        // Distance to edges from center
+        let distTop = bounds.height - centerY
+        let distBottom = centerY
+        let distLeft = centerX
+        let distRight = bounds.width - centerX
+        
+        let minEdge = min(distTop, distBottom, distLeft, distRight)
+        
+        var targetEdge: ToolbarEdge = .top
+        if minEdge == distTop { targetEdge = .top }
+        else if minEdge == distBottom { targetEdge = .bottom }
+        else if minEdge == distLeft { targetEdge = .left }
+        else { targetEdge = .right }
+        
+        applyEdgeConstraints(edge: targetEdge, animate: true)
+    }
+    
+    private func applyEdgeConstraints(edge: ToolbarEdge, animate: Bool) {
+        SettingsStore.shared.toolbarEdge = edge
+        
+        NSLayoutConstraint.deactivate([
+            toolbarLeftConstraint, toolbarTopConstraint,
+            snapTopConstraint, snapBottomConstraint, snapLeadingConstraint, snapTrailingConstraint,
+            snapCenterXConstraint, snapCenterYConstraint
+        ])
+        
+        var toActivate: [NSLayoutConstraint] = []
+        
+        switch edge {
+        case .top:
+            toActivate = [snapTopConstraint, snapCenterXConstraint]
+        case .bottom:
+            toActivate = [snapBottomConstraint, snapCenterXConstraint]
+        case .left:
+            toActivate = [snapLeadingConstraint, snapCenterYConstraint]
+        case .right:
+            toActivate = [snapTrailingConstraint, snapCenterYConstraint]
+        }
+        
+        NSLayoutConstraint.activate(toActivate)
+        
+        if animate {
+            NSAnimationContext.runAnimationGroup({ context in
+                context.duration = 0.3
+                context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                window?.contentView?.animator().layoutSubtreeIfNeeded()
+            })
+        }
     }
 }
 

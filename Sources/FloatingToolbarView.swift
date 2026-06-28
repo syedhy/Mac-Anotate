@@ -155,7 +155,7 @@ struct FloatingToolbarView: View {
                 TaperedStrokeSlider(value: Binding(
                     get: { settings.lastSelectedStrokeWidth },
                     set: { settings.lastSelectedStrokeWidth = $0 }
-                ), range: 2...22, isVertical: isVertical)
+                ), range: 2...20, isVertical: isVertical)
                 .frame(width: isVertical ? 20 : 80, height: isVertical ? 80 : 20)
             }
             .customTooltip("Stroke Width")
@@ -353,7 +353,7 @@ struct ToolButton: View {
 
 struct TaperedStrokeSlider: View {
     @Binding var value: CGFloat
-    var range: ClosedRange<CGFloat> = 2...22
+    var range: ClosedRange<CGFloat> = 2...20
     var activeColor: Color = .accentColor
     var isVertical: Bool = false
     var onEditingChanged: ((Bool) -> Void)? = nil
@@ -407,6 +407,7 @@ struct TaperedStrokeSlider: View {
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
                                 .background(Capsule().fill(Color(nsColor: .windowBackgroundColor)).shadow(radius: 2))
+                                .fixedSize()
                                 .offset(x: -30)
                                 .opacity(isDragging ? 1 : 0)
                                 .animation(.easeInOut(duration: 0.1), value: isDragging)
@@ -471,6 +472,7 @@ struct TaperedStrokeSlider: View {
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
                                 .background(Capsule().fill(Color(nsColor: .windowBackgroundColor)).shadow(radius: 2))
+                                .fixedSize()
                                 .offset(y: -30)
                                 .opacity(isDragging ? 1 : 0)
                                 .animation(.easeInOut(duration: 0.1), value: isDragging)

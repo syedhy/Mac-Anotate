@@ -1142,7 +1142,7 @@ struct SelectionPropertiesPanel: View {
                         Text("\(Int(localStrokeWidth)) pt").font(.system(size: 11)).foregroundColor(.secondary)
                     }
                     
-                    TaperedStrokeSlider(value: $localStrokeWidth, range: 2...22) { isEditing in
+                    TaperedStrokeSlider(value: $localStrokeWidth, range: 2...20) { isEditing in
                         if !isEditing {
                             onStrokeWidthChanged(localStrokeWidth)
                         }

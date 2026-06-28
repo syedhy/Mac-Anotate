@@ -3,13 +3,13 @@ import Cocoa
 class SelectionManager {
     static let shared = SelectionManager()
     
-    var selectedAnnotationID: UUID?
+    var selectedAnnotationIDs: Set<UUID> = []
     var hitResult: AnnotationHitTester.HitResult = .none
     
     private init() {}
     
     func clearSelection() {
-        selectedAnnotationID = nil
+        selectedAnnotationIDs.removeAll()
         hitResult = .none
     }
 }

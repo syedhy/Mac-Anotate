@@ -5,11 +5,12 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
     private var annotations: [Annotation] = []
     private var currentAnnotation: Annotation?
     private var laserPointerLocation: CGPoint?
+    var hoveredAnnotationID: UUID?
+    private var marqueeRect: CGRect?
     private var laserTimer: Timer?
     
     private var editingTextIndex: Int?
     private var activeTextField: NSTextField?
-    private var hoveredAnnotationID: UUID?
     private var trackingArea: NSTrackingArea?
     
     override var acceptsFirstResponder: Bool { true }
@@ -86,10 +87,10 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
                 // Switch to select tool and select the last drawn annotation
                 ToolManager.shared.activeTool = .select
                 if let last = annotations.last, last.type != .laserPen, last.type != .pen {
-                    SelectionManager.shared.selectedAnnotationID = last.id
+                    SelectionManager.shared.selectedAnnotationIDs = [last.id]
                 }
                 needsDisplay = true
-            } else if SelectionManager.shared.selectedAnnotationID != nil {
+            } else if !SelectionManager.shared.selectedAnnotationIDs.isEmpty {
                 // Clear selection
                 SelectionManager.shared.clearSelection()
                 needsDisplay = true
@@ -110,6 +111,14 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
             return
         }
         
+        // Command + A for Select All
+        if characters.lowercased() == "a" && (event.modifierFlags.contains(.command) || event.modifierFlags.contains(.control)) {
+            ToolManager.shared.activeTool = .select
+            SelectionManager.shared.selectedAnnotationIDs = Set(annotations.filter { $0.type != .laserPen }.map { $0.id })
+            needsDisplay = true
+            return
+        }
+        
         // C for Clear
         if characters.lowercased() == "c" {
             promptForClear()
@@ -118,8 +127,8 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
         
         // Backspace or Delete to remove selected annotation
         if event.keyCode == 51 || event.keyCode == 117 {
-            if let selectedID = SelectionManager.shared.selectedAnnotationID {
-                annotations.removeAll { $0.id == selectedID }
+            if !SelectionManager.shared.selectedAnnotationIDs.isEmpty {
+                annotations.removeAll { SelectionManager.shared.selectedAnnotationIDs.contains($0.id) }
                 SelectionManager.shared.clearSelection()
                 needsDisplay = true
             }
@@ -138,8 +147,10 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
     enum InteractionState {
         case idle
         case drawingNewAnnotation
-        case movingSelection(startPoint: CGPoint, originalAnnotation: Annotation)
         case resizingSelection(handleIndex: Int, startPoint: CGPoint, originalAnnotation: Annotation)
+        case movingSelection(startPoint: CGPoint, originalAnnotations: [UUID: Annotation])
+        case marqueeSelection(startPoint: CGPoint, currentRect: CGRect)
+        case resizingMultipleSelection(startPoint: CGPoint, originalAnnotations: [UUID: Annotation], groupBoundingBox: CGRect)
     }
     
     private var interactionState: InteractionState = .idle
@@ -157,6 +168,7 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
             }
         }
         
+
         if hoveredAnnotationID != newHover {
             hoveredAnnotationID = newHover
             needsDisplay = true
@@ -185,6 +197,9 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
                 return
             }
             
+            SelectionManager.shared.clearSelection()
+            needsDisplay = true
+            
             // Check if we hit an existing text annotation
             for (index, annotation) in annotations.enumerated().reversed() {
                 if annotation.type == .text && AnnotationHitTester.hitTest(point: point, annotation: annotation) == .body {
@@ -200,42 +215,102 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
         
         // If in Select mode, check hit test
         if tool == .select {
-            // Check if we clicked a selected handle
-            if let selectedID = SelectionManager.shared.selectedAnnotationID,
-               let index = annotations.firstIndex(where: { $0.id == selectedID }) {
-                let hit = AnnotationHitTester.hitTest(point: point, annotation: annotations[index])
-                switch hit {
-                case .resizeHandle(let idx), .controlHandle(let idx):
-                    interactionState = .resizingSelection(handleIndex: idx, startPoint: point, originalAnnotation: annotations[index])
-                    return
-                case .body:
-                    if event.clickCount == 2 && annotations[index].type == .text {
-                        startTextEditing(existingAnnotation: annotations[index], at: index)
+            if SelectionManager.shared.selectedAnnotationIDs.count > 1 {
+                if let groupBB = AnnotationHitTester.getGroupBoundingBox(for: annotations, selectedIDs: SelectionManager.shared.selectedAnnotationIDs) {
+                    let groupHandle = CGPoint(x: groupBB.maxX, y: groupBB.maxY)
+                    
+                    var originals: [UUID: Annotation] = [:]
+                    for id in SelectionManager.shared.selectedAnnotationIDs {
+                        if let ann = annotations.first(where: { $0.id == id }) {
+                            originals[id] = ann
+                        }
+                    }
+                    
+                    if point.distance(to: groupHandle) < 10.0 {
+                        interactionState = .resizingMultipleSelection(startPoint: point, originalAnnotations: originals, groupBoundingBox: groupBB)
                         return
                     }
-                    interactionState = .movingSelection(startPoint: point, originalAnnotation: annotations[index])
-                    return
-                case .none:
-                    break
+                    
+                    if groupBB.contains(point) {
+                        interactionState = .movingSelection(startPoint: point, originalAnnotations: originals)
+                        return
+                    }
                 }
             }
             
-            // Otherwise, see if we hit another annotation body
+            // First check if we clicked on an already selected annotation's body or handle
+            var clickedSelected = false
+            if !SelectionManager.shared.selectedAnnotationIDs.isEmpty {
+                for selectedID in SelectionManager.shared.selectedAnnotationIDs {
+                    if let index = annotations.firstIndex(where: { $0.id == selectedID }) {
+                        let hit = AnnotationHitTester.hitTest(point: point, annotation: annotations[index])
+                        switch hit {
+                        case .resizeHandle(let idx), .controlHandle(let idx):
+                            if SelectionManager.shared.selectedAnnotationIDs.count == 1 {
+                                interactionState = .resizingSelection(handleIndex: idx, startPoint: point, originalAnnotation: annotations[index])
+                                return
+                            }
+                        case .body:
+                            if event.clickCount == 2 && annotations[index].type == .text && SelectionManager.shared.selectedAnnotationIDs.count == 1 {
+                                startTextEditing(existingAnnotation: annotations[index], at: index)
+                                return
+                            }
+                            clickedSelected = true
+                        case .none:
+                            break
+                        }
+                    }
+                }
+            }
+            
+            if clickedSelected {
+                // Prepare original annotations for moving
+                var originals: [UUID: Annotation] = [:]
+                for id in SelectionManager.shared.selectedAnnotationIDs {
+                    if let ann = annotations.first(where: { $0.id == id }) {
+                        originals[id] = ann
+                    }
+                }
+                interactionState = .movingSelection(startPoint: point, originalAnnotations: originals)
+                return
+            }
+            
+            // Otherwise, see if we hit another annotation body (not currently selected)
             for (index, annotation) in annotations.enumerated().reversed() {
                 if AnnotationHitTester.hitTest(point: point, annotation: annotation) != .none {
                     if event.clickCount == 2 && annotation.type == .text {
+                        SelectionManager.shared.selectedAnnotationIDs = [annotation.id]
                         startTextEditing(existingAnnotation: annotation, at: index)
                         return
                     }
-                    SelectionManager.shared.selectedAnnotationID = annotation.id
-                    interactionState = .movingSelection(startPoint: point, originalAnnotation: annotation)
+                    if event.modifierFlags.contains(.shift) {
+                        if SelectionManager.shared.selectedAnnotationIDs.contains(annotation.id) {
+                            SelectionManager.shared.selectedAnnotationIDs.remove(annotation.id)
+                        } else {
+                            SelectionManager.shared.selectedAnnotationIDs.insert(annotation.id)
+                        }
+                    } else {
+                        SelectionManager.shared.selectedAnnotationIDs = [annotation.id]
+                    }
+                    
+                    var originals: [UUID: Annotation] = [:]
+                    for id in SelectionManager.shared.selectedAnnotationIDs {
+                        if let ann = annotations.first(where: { $0.id == id }) {
+                            originals[id] = ann
+                        }
+                    }
+                    interactionState = .movingSelection(startPoint: point, originalAnnotations: originals)
                     needsDisplay = true
                     return
                 }
             }
             
-            // Hit nothing, clear selection
-            SelectionManager.shared.clearSelection()
+            // Hit nothing, clear selection and start marquee
+            if !event.modifierFlags.contains(.shift) {
+                SelectionManager.shared.clearSelection()
+            }
+            interactionState = .marqueeSelection(startPoint: point, currentRect: CGRect(origin: point, size: .zero))
+            marqueeRect = CGRect(origin: point, size: .zero)
             needsDisplay = true
             return
         }
@@ -293,30 +368,32 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
             currentAnnotation = current
             needsDisplay = true
             
-        case .movingSelection(let startPoint, let originalAnnotation):
-            guard let index = annotations.firstIndex(where: { $0.id == originalAnnotation.id }) else { return }
+        case .movingSelection(let startPoint, let originalAnnotations):
             let dx = point.x - startPoint.x
             let dy = point.y - startPoint.y
             
-            var moved = originalAnnotation
-            if moved.type == .arrow {
-                moved.arrowStart = CGPoint(x: moved.arrowStart!.x + dx, y: moved.arrowStart!.y + dy)
-                moved.arrowEnd = CGPoint(x: moved.arrowEnd!.x + dx, y: moved.arrowEnd!.y + dy)
-                if let ctrl = moved.arrowControlPoint {
-                    moved.arrowControlPoint = CGPoint(x: ctrl.x + dx, y: ctrl.y + dy)
+            for (id, originalAnnotation) in originalAnnotations {
+                guard let index = annotations.firstIndex(where: { $0.id == id }) else { continue }
+                var moved = originalAnnotation
+                if moved.type == .arrow {
+                    moved.arrowStart = CGPoint(x: moved.arrowStart!.x + dx, y: moved.arrowStart!.y + dy)
+                    moved.arrowEnd = CGPoint(x: moved.arrowEnd!.x + dx, y: moved.arrowEnd!.y + dy)
+                    if let ctrl = moved.arrowControlPoint {
+                        moved.arrowControlPoint = CGPoint(x: ctrl.x + dx, y: ctrl.y + dy)
+                    }
+                } else if moved.type == .rectangle || moved.type == .oval {
+                    if let r = moved.rect {
+                        moved.rect = r.offsetBy(dx: dx, dy: dy)
+                    }
+                } else if moved.type == .pen || moved.type == .laserPen {
+                    moved.points = moved.points.map { CGPoint(x: $0.x + dx, y: $0.y + dy) }
+                } else if moved.type == .text {
+                    if let r = moved.textRect {
+                        moved.textRect = r.offsetBy(dx: dx, dy: dy)
+                    }
                 }
-            } else if moved.type == .rectangle || moved.type == .oval {
-                if let r = moved.rect {
-                    moved.rect = r.offsetBy(dx: dx, dy: dy)
-                }
-            } else if moved.type == .pen || moved.type == .laserPen {
-                moved.points = moved.points.map { CGPoint(x: $0.x + dx, y: $0.y + dy) }
-            } else if moved.type == .text {
-                if let r = moved.textRect {
-                    moved.textRect = r.offsetBy(dx: dx, dy: dy)
-                }
+                annotations[index] = moved
             }
-            annotations[index] = moved
             needsDisplay = true
             
         case .resizingSelection(let handleIndex, let startPoint, let originalAnnotation):
@@ -439,6 +516,52 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
             }
             annotations[index] = resized
             needsDisplay = true
+            
+        case .resizingMultipleSelection(let startPoint, let originalAnnotations, let groupBB):
+            // Scale relative to the bottom-left corner of the overall bounding box
+            let origin = CGPoint(x: groupBB.minX, y: groupBB.minY)
+            let initialDistance = startPoint.distance(to: origin)
+            let currentDistance = point.distance(to: origin)
+            
+            guard initialDistance > 10 else { break }
+            let scale = max(0.1, currentDistance / initialDistance)
+            
+            for (id, original) in originalAnnotations {
+                if let index = annotations.firstIndex(where: { $0.id == id }) {
+                    var scaledAnn = original
+                    scaledAnn.scale(by: scale, origin: origin)
+                    annotations[index] = scaledAnn
+                }
+            }
+            needsDisplay = true
+            
+        case .marqueeSelection(let startPoint, _):
+            let newRect = CGRect(
+                x: min(startPoint.x, point.x),
+                y: min(startPoint.y, point.y),
+                width: abs(point.x - startPoint.x),
+                height: abs(point.y - startPoint.y)
+            )
+            marqueeRect = newRect
+            interactionState = .marqueeSelection(startPoint: startPoint, currentRect: newRect)
+            
+            var newlySelected: Set<UUID> = []
+            for annotation in annotations {
+                let bb = AnnotationHitTester.getBoundingBox(for: annotation)
+                if newRect.contains(bb) {
+                    newlySelected.insert(annotation.id)
+                }
+            }
+            
+            if NSEvent.modifierFlags.contains(.shift) {
+                // Keep existing selection and add newly intersected ones
+                var union = SelectionManager.shared.selectedAnnotationIDs
+                union.formUnion(newlySelected)
+                SelectionManager.shared.selectedAnnotationIDs = union
+            } else {
+                SelectionManager.shared.selectedAnnotationIDs = newlySelected
+            }
+            needsDisplay = true
         }
     }
     
@@ -448,6 +571,15 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
         switch interactionState {
         case .idle:
             break
+            
+        case .resizingMultipleSelection:
+            interactionState = .idle
+            needsDisplay = true
+            
+        case .marqueeSelection:
+            marqueeRect = nil
+            interactionState = .idle
+            needsDisplay = true
             
         case .drawingNewAnnotation:
             guard var finalAnnotation = currentAnnotation else { return }
@@ -487,7 +619,7 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
             }
             
             if ToolManager.shared.activeTool == .select {
-                SelectionManager.shared.selectedAnnotationID = finalAnnotation.id
+                SelectionManager.shared.selectedAnnotationIDs = [finalAnnotation.id]
             } else {
                 SelectionManager.shared.clearSelection()
             }
@@ -652,7 +784,7 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
                 annotations[index].textRect = finalRect
                 annotations[index].fontSize = font.pointSize
                 ToolManager.shared.activeTool = .select
-                SelectionManager.shared.selectedAnnotationID = annotations[index].id
+                SelectionManager.shared.selectedAnnotationIDs = [annotations[index].id]
             } else {
                 var annotation = Annotation(type: .text, color: SettingsStore.shared.lastSelectedColor, strokeWidth: SettingsStore.shared.lastSelectedStrokeWidth)
                 annotation.text = text
@@ -661,7 +793,7 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
                 annotations.append(annotation)
                 
                 ToolManager.shared.activeTool = .select
-                SelectionManager.shared.selectedAnnotationID = annotation.id
+                SelectionManager.shared.selectedAnnotationIDs = [annotation.id]
             }
         } else {
             // Empty text
@@ -687,10 +819,21 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
     }
     
     private var isDragging: Bool {
-        if case .resizingSelection = interactionState {
+        switch interactionState {
+        case .movingSelection, .resizingSelection, .resizingMultipleSelection:
             return true
+        default:
+            return false
         }
-        return false
+    }
+
+    private var isResizing: Bool {
+        switch interactionState {
+        case .resizingSelection, .resizingMultipleSelection:
+            return true
+        default:
+            return false
+        }
     }
 
     override func draw(_ dirtyRect: NSRect) {
@@ -704,11 +847,11 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
             annotationsToDraw.remove(at: editingIndex)
         }
         
-        AnnotationRenderer.draw(annotationsToDraw, in: context, isDragging: self.isDragging, hoveredID: hoveredAnnotationID)
+        AnnotationRenderer.draw(annotationsToDraw, in: context, isDragging: self.isDragging, isResizing: self.isResizing, hoveredID: hoveredAnnotationID, marqueeRect: marqueeRect)
         
         // Draw in-progress annotation
         if let current = currentAnnotation {
-            AnnotationRenderer.draw([current], in: context, isDragging: self.isDragging)
+            AnnotationRenderer.draw([current], in: context, isDragging: self.isDragging, isResizing: self.isResizing)
         }
         
         // Draw laser pointer

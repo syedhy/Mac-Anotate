@@ -1,6 +1,6 @@
 import Cocoa
 
-class AnnotationCanvasView: NSView, NSTextFieldDelegate {
+class AnnotationCanvasView: NSView, NSTextViewDelegate {
     
     private var annotations: [Annotation] = []
     private var currentAnnotation: Annotation?
@@ -94,7 +94,11 @@ class AnnotationCanvasView: NSView, NSTextFieldDelegate {
                 needsDisplay = true
             } else {
                 // Toggle overlay if already in select mode with no selection
-                (window?.windowController as? OverlayWindowController)?.toggleOverlay()
+                if let appDelegate = NSApp.delegate as? AppDelegate {
+                    appDelegate.overlayWindowController?.toggleOverlay()
+                } else {
+                    (window?.windowController as? OverlayWindowController)?.toggleOverlay()
+                }
             }
             return
         }
@@ -165,6 +169,13 @@ class AnnotationCanvasView: NSView, NSTextFieldDelegate {
         let width = SettingsStore.shared.lastSelectedStrokeWidth
         
         if tool == .text {
+            if activeTextField != nil {
+                // If we click outside while a text field is active, let Cocoa end editing
+                // by forcing first responder away, and don't create a new text box.
+                self.window?.makeFirstResponder(self)
+                return
+            }
+            
             // Check if we hit an existing text annotation
             for (index, annotation) in annotations.enumerated().reversed() {
                 if annotation.type == .text && AnnotationHitTester.hitTest(point: point, annotation: annotation) == .body {
@@ -330,31 +341,61 @@ class AnnotationCanvasView: NSView, NSTextFieldDelegate {
                 }
             } else if resized.type == .text {
                 guard let r = resized.textRect else { return }
-                var minX = r.minX
-                var maxX = r.maxX
-                let oldMaxY = r.maxY // Top edge in bottom-left coordinate system
                 
-                if handleIndex == 0 || handleIndex == 2 { // minX handles
-                    minX += dx
-                } else { // maxX handles
-                    maxX += dx
-                }
-                
-                let width = max(50.0, abs(maxX - minX))
-                let minXFixed = min(minX, maxX)
-                
-                if let text = resized.text {
-                    let font = NSFont(name: "Marker Felt", size: resized.fontSize) ?? NSFont.systemFont(ofSize: resized.fontSize, weight: .bold)
-                    let attributes: [NSAttributedString.Key: Any] = [.font: font]
-                    let boundingRect = (text as NSString).boundingRect(
-                        with: NSSize(width: width, height: .greatestFiniteMagnitude),
-                        options: [.usesLineFragmentOrigin, .usesFontLeading],
-                        attributes: attributes
-                    )
-                    let height = boundingRect.height
+                if handleIndex == 2 {
+                    // Scaling handle (bottom-right)
+                    let scaleFactor = max(0.1, 1.0 + (dx * 0.01))
                     
-                    // Keep the top edge anchored
-                    resized.textRect = CGRect(x: minXFixed, y: oldMaxY - height, width: width, height: height)
+                    var resizedFont = originalAnnotation.fontSize * scaleFactor
+                    resizedFont = max(8, min(resizedFont, 200)) // clamp
+                    resized.fontSize = resizedFont
+                    
+                    if let text = resized.text, let origRect = originalAnnotation.textRect {
+                        let font = NSFont(name: "Marker Felt", size: resizedFont) ?? NSFont.systemFont(ofSize: resizedFont, weight: .bold)
+                        let attributes: [NSAttributedString.Key: Any] = [.font: font]
+                        
+                        let fontScale = resizedFont / originalAnnotation.fontSize
+                        let newWidth = max(50.0, origRect.width * fontScale)
+                        
+                        let boundingRect = (text as NSString).boundingRect(
+                            with: NSSize(width: newWidth, height: .greatestFiniteMagnitude),
+                            options: [.usesLineFragmentOrigin, .usesFontLeading],
+                            attributes: attributes
+                        )
+                        let height = boundingRect.height
+                        
+                        // Keep top-left anchored
+                        let topY = origRect.maxY
+                        let leftX = origRect.minX
+                        resized.textRect = CGRect(x: leftX, y: topY - height, width: newWidth, height: height)
+                    }
+                } else {
+                    var minX = r.minX
+                    var maxX = r.maxX
+                    let oldMaxY = r.maxY // Top edge in bottom-left coordinate system
+                    
+                    if handleIndex == 0 { // minX handle
+                        minX += dx
+                    } else if handleIndex == 1 { // maxX handle
+                        maxX += dx
+                    }
+                    
+                    let width = max(50.0, abs(maxX - minX))
+                    let minXFixed = min(minX, maxX)
+                    
+                    if let text = resized.text {
+                        let font = NSFont(name: "Marker Felt", size: resized.fontSize) ?? NSFont.systemFont(ofSize: resized.fontSize, weight: .bold)
+                        let attributes: [NSAttributedString.Key: Any] = [.font: font]
+                        let boundingRect = (text as NSString).boundingRect(
+                            with: NSSize(width: width, height: .greatestFiniteMagnitude),
+                            options: [.usesLineFragmentOrigin, .usesFontLeading],
+                            attributes: attributes
+                        )
+                        let height = boundingRect.height
+                        
+                        // Keep the top edge anchored
+                        resized.textRect = CGRect(x: minXFixed, y: oldMaxY - height, width: width, height: height)
+                    }
                 }
             } else if resized.type == .rectangle || resized.type == .oval {
                 guard let r = resized.rect else { return }
@@ -460,103 +501,112 @@ class AnnotationCanvasView: NSView, NSTextFieldDelegate {
         let finalWidth = max(50.0, defaultWidth) // Ensure minimum width of 50
         
         let textField = NSTextField(frame: NSRect(x: point.x, y: point.y - 12, width: finalWidth, height: 30))
-        setupTextField(textField)
+        let textView = NSTextView(frame: NSRect(x: point.x, y: point.y - 12, width: finalWidth, height: 30))
+        setupTextView(textView)
         
-        self.addSubview(textField)
-        self.window?.makeFirstResponder(textField)
-        activeTextField = textField
+        self.addSubview(textView)
+        self.window?.makeFirstResponder(textView)
+        activeTextView = textView
     }
     
+    private var activeTextView: NSTextView?
+    
     private func startTextEditing(existingAnnotation: Annotation, at index: Int) {
-        if let existing = activeTextField {
+        if let existing = activeTextView {
             existing.removeFromSuperview()
         }
         
         editingTextIndex = index
         let rect = existingAnnotation.textRect ?? CGRect(x: 0, y: 0, width: 200, height: 30)
         
-        let textField = NSTextField(frame: NSRect(x: rect.minX, y: rect.minY, width: max(rect.width, 50), height: max(rect.height, 30)))
-        setupTextField(textField)
-        textField.stringValue = existingAnnotation.text ?? ""
+        let textView = NSTextView(frame: NSRect(x: rect.minX, y: rect.minY, width: max(rect.width, 50), height: max(rect.height, 30)))
+        setupTextView(textView)
+        textView.string = existingAnnotation.text ?? ""
         
-        self.addSubview(textField)
-        self.window?.makeFirstResponder(textField)
+        self.addSubview(textView)
+        self.window?.makeFirstResponder(textView)
         
         // Move cursor to end
-        if let editor = textField.currentEditor() as? NSTextView {
-            editor.setSelectedRange(NSRange(location: textField.stringValue.count, length: 0))
-        }
+        textView.setSelectedRange(NSRange(location: textView.string.count, length: 0))
         
-        activeTextField = textField
+        activeTextView = textView
         self.needsDisplay = true // Redraw to hide the original annotation
+        
+        // Ensure proper initial height
+        adjustTextViewHeight(textView)
     }
     
-    private func setupTextField(_ textField: NSTextField) {
-        textField.delegate = self
-        textField.isBordered = false
-        textField.drawsBackground = false
-        textField.focusRingType = .none
-        textField.font = NSFont(name: "Marker Felt", size: 28) ?? NSFont.systemFont(ofSize: 24, weight: .bold)
-        textField.textColor = SettingsStore.shared.lastSelectedColor
-        textField.isEditable = true
-        textField.isSelectable = true
-        textField.usesSingleLineMode = false
-        textField.cell?.wraps = true
-        textField.cell?.isScrollable = false
-        textField.lineBreakMode = .byWordWrapping
+    private func setupTextView(_ textView: NSTextView) {
+        textView.delegate = self
+        textView.drawsBackground = false
+        textView.isRichText = false
+        textView.font = NSFont(name: "Marker Felt", size: 28) ?? NSFont.systemFont(ofSize: 24, weight: .bold)
+        textView.textColor = SettingsStore.shared.lastSelectedColor
+        textView.isEditable = true
+        textView.isSelectable = true
+        textView.isVerticallyResizable = true
+        textView.isHorizontallyResizable = false
+        textView.autoresizingMask = [.width]
+        textView.textContainer?.containerSize = NSSize(width: textView.frame.width, height: .greatestFiniteMagnitude)
+        textView.textContainer?.widthTracksTextView = true
+        textView.textContainerInset = NSSize(width: 0, height: 0)
     }
     
-    func controlTextDidChange(_ obj: Notification) {
-        guard let textField = obj.object as? NSTextField, let cell = textField.cell else { return }
+    func textDidChange(_ notification: Notification) {
+        guard let textView = notification.object as? NSTextView else { return }
+        adjustTextViewHeight(textView)
+    }
+    
+    private func adjustTextViewHeight(_ textView: NSTextView) {
+        guard let layoutManager = textView.layoutManager, let textContainer = textView.textContainer else { return }
         
-        // Resize height dynamically based on content
-        let currentFrame = textField.frame
-        let requiredSize = cell.cellSize(forBounds: NSRect(x: 0, y: 0, width: currentFrame.width, height: .greatestFiniteMagnitude))
+        layoutManager.ensureLayout(for: textContainer)
+        let usedRect = layoutManager.usedRect(for: textContainer)
+        let requiredHeight = max(30.0, usedRect.height + 10.0) // Add padding
+        let currentFrame = textView.frame
         
-        // Only increase height to allow downward growth
-        if requiredSize.height > currentFrame.height {
-            let heightDiff = requiredSize.height - currentFrame.height
+        if requiredHeight > currentFrame.height {
+            let heightDiff = requiredHeight - currentFrame.height
             // NSView origin is bottom-left, so to keep the top edge fixed, we decrease Y by the height difference
-            let newFrame = NSRect(x: currentFrame.minX, y: currentFrame.minY - heightDiff, width: currentFrame.width, height: requiredSize.height)
-            textField.frame = newFrame
+            let newFrame = NSRect(x: currentFrame.minX, y: currentFrame.minY - heightDiff, width: currentFrame.width, height: requiredHeight)
+            textView.frame = newFrame
         }
     }
     
-    func control(_ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
+    func textView(_ textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
         if commandSelector == #selector(NSResponder.cancelOperation(_:)) {
             // Escape key finishes editing
             self.window?.makeFirstResponder(self)
             return true
         } else if commandSelector == #selector(NSResponder.insertNewline(_:)) {
-            textView.insertNewlineIgnoringFieldEditor(self)
-            // Trigger a manual resize after newline
-            NotificationCenter.default.post(name: NSControl.textDidChangeNotification, object: control)
+            textView.insertText("\n", replacementRange: textView.selectedRange())
             return true
         }
         return false
     }
     
-    func controlTextDidEndEditing(_ obj: Notification) {
-        guard let textField = activeTextField else { return }
-        let text = textField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+    func textDidEndEditing(_ notification: Notification) {
+        guard let textView = notification.object as? NSTextView else { return }
+        let text = textView.string.trimmingCharacters(in: .whitespacesAndNewlines)
         
         if !text.isEmpty {
-            let font = textField.font ?? NSFont(name: "Marker Felt", size: 28) ?? NSFont.systemFont(ofSize: 24, weight: .bold)
+            let font = textView.font ?? NSFont(name: "Marker Felt", size: 28) ?? NSFont.systemFont(ofSize: 24, weight: .bold)
             
-            // Calculate actual bounding rect using the current width limit
             let attributes: [NSAttributedString.Key: Any] = [.font: font]
             let boundingRect = (text as NSString).boundingRect(
-                with: NSSize(width: textField.frame.width, height: .greatestFiniteMagnitude),
+                with: NSSize(width: textView.frame.width, height: .greatestFiniteMagnitude),
                 options: [.usesLineFragmentOrigin, .usesFontLeading],
                 attributes: attributes
             )
             
-            // Because NSView has bottom-left origin, keep the top edge aligned
+            // Adjust the final rect to match the exact text height, but anchored at the top
+            let finalHeight = max(30, boundingRect.height)
+            let heightDiff = finalHeight - textView.frame.height
             let finalRect = CGRect(
-                x: textField.frame.minX,
-                y: textField.frame.maxY - boundingRect.height,
-                width: textField.frame.width,
-                height: boundingRect.height
+                x: textView.frame.minX,
+                y: textView.frame.minY - heightDiff,
+                width: textView.frame.width,
+                height: finalHeight
             )
             
             if let index = editingTextIndex {
@@ -582,8 +632,8 @@ class AnnotationCanvasView: NSView, NSTextFieldDelegate {
             }
         }
         
-        textField.removeFromSuperview()
-        activeTextField = nil
+        textView.removeFromSuperview()
+        activeTextView = nil
         editingTextIndex = nil
         self.window?.makeFirstResponder(self)
         needsDisplay = true

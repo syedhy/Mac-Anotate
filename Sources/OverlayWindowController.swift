@@ -85,24 +85,25 @@ class OverlayWindowController: NSWindowController, NSWindowDelegate {
         )
         clearPromptHostingView = NSHostingView(rootView: clearPrompt)
         clearPromptHostingView.translatesAutoresizingMaskIntoConstraints = false
-        contentView.addSubview(clearPromptHostingView)
-        
-        NSLayoutConstraint.activate([
-            clearPromptHostingView.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
-            clearPromptHostingView.centerYAnchor.constraint(equalTo: contentView.centerYAnchor)
-        ])
-        
-        clearPromptHostingView.isHidden = true
     }
     
     private var clearPromptHostingView: NSHostingView<ClearPromptView>!
     
     func showClearPrompt() {
+        guard let contentView = window?.contentView else { return }
+        if clearPromptHostingView.superview == nil {
+            contentView.addSubview(clearPromptHostingView)
+            NSLayoutConstraint.activate([
+                clearPromptHostingView.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
+                clearPromptHostingView.centerYAnchor.constraint(equalTo: contentView.centerYAnchor)
+            ])
+        }
         clearPromptHostingView.isHidden = false
     }
     
     func hideClearPrompt() {
         clearPromptHostingView.isHidden = true
+        clearPromptHostingView.removeFromSuperview()
         canvasView.window?.makeFirstResponder(canvasView)
     }
     
@@ -116,7 +117,7 @@ class OverlayWindowController: NSWindowController, NSWindowDelegate {
             window.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
             toolbarHostingView.isHidden = false
-            canvasView.becomeFirstResponder()
+            window.makeFirstResponder(canvasView)
         } else {
             window.ignoresMouseEvents = true
             toolbarHostingView.isHidden = true
@@ -145,6 +146,7 @@ struct ClearPromptView: View {
     let onCancel: () -> Void
     
     @State private var focusedButton: Int = 1 // 0 for Clear, 1 for Cancel
+    @State private var eventMonitor: Any?
     
     var body: some View {
         VStack(spacing: 16) {
@@ -190,7 +192,7 @@ struct ClearPromptView: View {
                 .shadow(color: Color.black.opacity(0.15), radius: 20, x: 0, y: 10)
         )
         .onAppear {
-            NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            eventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
                 if event.keyCode == 123 || event.keyCode == 124 { // Left or Right arrow
                     focusedButton = (focusedButton == 0) ? 1 : 0
                     return nil
@@ -206,6 +208,12 @@ struct ClearPromptView: View {
                     return nil
                 }
                 return event
+            }
+        }
+        .onDisappear {
+            if let monitor = eventMonitor {
+                NSEvent.removeMonitor(monitor)
+                eventMonitor = nil
             }
         }
     }

@@ -51,6 +51,12 @@ class RoughPathGenerator {
         
         switch annotation.type {
         case .pen, .laserPen:
+            if annotation.points.count == 1 {
+                let p = annotation.points[0]
+                path.move(to: p)
+                path.line(to: CGPoint(x: p.x + 0.1, y: p.y))
+                return path
+            }
             guard annotation.points.count >= 2 else { return path }
             path.move(to: annotation.points[0])
             for i in 1..<annotation.points.count {

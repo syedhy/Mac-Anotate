@@ -1,4 +1,6 @@
 import Cocoa
+import Combine
+import SwiftUI
 
 class AnnotationCanvasView: NSView, NSTextViewDelegate {
     
@@ -11,7 +13,10 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
     
     private var editingTextIndex: Int?
     private var activeTextField: NSTextField?
+    private var activeTextView: NSTextView?
     private var trackingArea: NSTrackingArea?
+    private var cancellables = Set<AnyCancellable>()
+    private var propertiesHostingView: NSHostingView<AnyView>!
     
     override var acceptsFirstResponder: Bool { true }
     
@@ -38,9 +43,34 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
         wantsLayer = true
         layer?.backgroundColor = NSColor.clear.cgColor
         
-        // Timer to continually redraw while lasers are active
-        laserTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 60.0, repeats: true) { [weak self] _ in
+        propertiesHostingView = NSHostingView(rootView: AnyView(EmptyView()))
+        propertiesHostingView.isHidden = true
+        propertiesHostingView.translatesAutoresizingMaskIntoConstraints = false
+        self.addSubview(propertiesHostingView)
+        
+        NSLayoutConstraint.activate([
+            propertiesHostingView.topAnchor.constraint(equalTo: self.topAnchor, constant: 20),
+            propertiesHostingView.trailingAnchor.constraint(equalTo: self.trailingAnchor, constant: -20)
+        ])
+        
+        let timer = Timer(timeInterval: 1.0 / 60.0, repeats: true) { [weak self] _ in
             self?.checkForActiveLasers()
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        laserTimer = timer
+        
+        ToolManager.shared.objectWillChange.sink { [weak self] _ in
+            self?.commitTextEditingIfActive()
+        }.store(in: &cancellables)
+        
+        SettingsStore.shared.objectWillChange.sink { [weak self] _ in
+            self?.commitTextEditingIfActive()
+        }.store(in: &cancellables)
+    }
+    
+    private func commitTextEditingIfActive() {
+        if activeTextView != nil {
+            self.window?.makeFirstResponder(self)
         }
     }
     
@@ -49,15 +79,19 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
     }
     
     private func checkForActiveLasers() {
-        let hasLasers = annotations.contains { $0.type == .laserPen && ($0.expiresAt ?? Date()) > Date() }
+        let now = Date()
+        let hasExpiredLasers = annotations.contains { $0.type == .laserPen && ($0.expiresAt ?? now) < now }
+        
+        if hasExpiredLasers {
+            annotations.removeAll { $0.type == .laserPen && ($0.expiresAt ?? now) < now }
+            needsDisplay = true
+        }
+        
+        let hasLasers = annotations.contains { $0.type == .laserPen && ($0.expiresAt ?? now) > now }
         let hasCurrentLaser = currentAnnotation?.type == .laserPen
         
         if hasLasers || hasCurrentLaser {
             needsDisplay = true
-            
-            // Clean up expired lasers to save memory
-            let now = Date()
-            annotations.removeAll { $0.type == .laserPen && ($0.expiresAt ?? now) < now }
         }
     }
     
@@ -211,7 +245,7 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
         let width = SettingsStore.shared.lastSelectedStrokeWidth
         
         if tool == .text {
-            if activeTextField != nil {
+            if activeTextView != nil {
                 // If we click outside while a text field is active, let Cocoa end editing
                 // by forcing first responder away, and don't create a new text box.
                 self.window?.makeFirstResponder(self)
@@ -236,16 +270,6 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
         
         // If in Select mode, check hit test
         if tool == .select {
-            if SelectionManager.shared.selectedAnnotationIDs.count == 1 {
-                let selectedID = SelectionManager.shared.selectedAnnotationIDs.first!
-                if let index = annotations.firstIndex(where: { $0.id == selectedID }) {
-                    if let newStyle = AnnotationHitTester.getPillHitMode(point: point, annotation: annotations[index]) {
-                        updateSelectedFillStyle(newStyle)
-                        needsDisplay = true
-                        return
-                    }
-                }
-            }
             
             if SelectionManager.shared.selectedAnnotationIDs.count > 1 {
                 if let groupBB = AnnotationHitTester.getGroupBoundingBox(for: annotations, selectedIDs: SelectionManager.shared.selectedAnnotationIDs) {
@@ -355,6 +379,17 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
         newAnn.fillStyle = SettingsStore.shared.lastSelectedFillStyle
         currentAnnotation = newAnn
         
+        if tool == .laserPen {
+            let now = Date()
+            annotations.removeAll { $0.type == .laserPen && ($0.expiresAt ?? now) < now }
+            
+            for i in 0..<annotations.count {
+                if annotations[i].type == .laserPen {
+                    annotations[i].expiresAt = nil
+                }
+            }
+        }
+        
         if tool == .arrow {
             currentAnnotation?.arrowStart = point
             currentAnnotation?.arrowEnd = point
@@ -397,7 +432,13 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
                     height: abs(point.y - originalStart.y)
                 )
             } else {
-                current.points.append(point)
+                if let last = current.points.last {
+                    if last.distance(to: point) > 1.0 {
+                        current.points.append(point)
+                    }
+                } else {
+                    current.points.append(point)
+                }
             }
             
             currentAnnotation = current
@@ -645,8 +686,19 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
                     annotationAdded = true
                 }
             } else {
-                finalAnnotation.points.append(point)
+                if finalAnnotation.points.last != point {
+                    finalAnnotation.points.append(point)
+                }
                 if finalAnnotation.points.count > 1 || finalAnnotation.type == .pen || finalAnnotation.type == .laserPen {
+                    if finalAnnotation.type == .laserPen {
+                        let expTime = Date().addingTimeInterval(1.5)
+                        finalAnnotation.expiresAt = expTime
+                        for i in 0..<annotations.count {
+                            if annotations[i].type == .laserPen {
+                                annotations[i].expiresAt = expTime
+                            }
+                        }
+                    }
                     annotations.append(finalAnnotation)
                     annotationAdded = true
                 }
@@ -716,8 +768,7 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
         activeTextView = textView
     }
     
-    private var activeTextView: NSTextView?
-    
+
     private func startTextEditing(existingAnnotation: Annotation, at index: Int) {
         if let existing = activeTextView {
             existing.removeFromSuperview()
@@ -768,9 +819,11 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
         case .filled:
             textView.drawsBackground = true
             textView.backgroundColor = color
-            textView.textColor = .white
+            textView.textColor = color == .white ? .black : .white
             textView.textContainerInset = NSSize(width: 12, height: 12)
         }
+        
+        textView.insertionPointColor = textView.textColor ?? color
         
         textView.wantsLayer = true
         textView.layer?.cornerRadius = 8
@@ -952,6 +1005,181 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
             // Inner core
             context.setFillColor(color.cgColor)
             context.fillEllipse(in: CGRect(x: pointerLoc.x - 4, y: pointerLoc.y - 4, width: 8, height: 8))
+        }
+        
+        updatePropertiesPill()
+    }
+    
+    private func updatePropertiesPill() {
+        let selectedIDs = SelectionManager.shared.selectedAnnotationIDs
+        
+        if selectedIDs.count != 1 || ToolManager.shared.activeTool != .select {
+            propertiesHostingView.isHidden = true
+            return
+        }
+        
+        guard let id = selectedIDs.first,
+              let index = annotations.firstIndex(where: { $0.id == id }) else {
+            propertiesHostingView.isHidden = true
+            return
+        }
+        
+        let annotation = annotations[index]
+        let boundingBox = AnnotationHitTester.getBoundingBox(for: annotation)
+        
+        let view = SelectionPropertiesPanel(
+            annotationType: annotation.type,
+            currentColor: annotation.color,
+            currentStrokeWidth: annotation.strokeWidth,
+            currentFillStyle: annotation.fillStyle,
+            onColorChanged: { [weak self] newColor in
+                guard let self = self, let i = self.annotations.firstIndex(where: { $0.id == id }) else { return }
+                self.annotations[i].color = newColor
+                self.needsDisplay = true
+            },
+            onStrokeWidthChanged: { [weak self] newWidth in
+                guard let self = self, let i = self.annotations.firstIndex(where: { $0.id == id }) else { return }
+                self.annotations[i].strokeWidth = newWidth
+                self.needsDisplay = true
+            },
+            onFillStyleChanged: { [weak self] newStyle in
+                guard let self = self, let i = self.annotations.firstIndex(where: { $0.id == id }) else { return }
+                self.annotations[i].fillStyle = newStyle
+                self.needsDisplay = true
+            }
+        )
+        
+        propertiesHostingView.rootView = AnyView(view)
+        propertiesHostingView.isHidden = false
+    }
+}
+
+struct SelectionPropertiesPanel: View {
+    let annotationType: ToolType
+    let currentColor: NSColor
+    let currentStrokeWidth: CGFloat
+    let currentFillStyle: ShapeFillStyle
+    
+    let onColorChanged: (NSColor) -> Void
+    let onStrokeWidthChanged: (CGFloat) -> Void
+    let onFillStyleChanged: (ShapeFillStyle) -> Void
+    
+    @State private var localStrokeWidth: CGFloat = 0.0
+    
+    // Convert NSColor to Color for SwiftUI
+    private var swiftUIColor: Color {
+        Color(nsColor: currentColor)
+    }
+    
+    private let availableColors: [NSColor] = [
+        NSColor(hex: "#FF3B30") ?? .systemRed,
+        NSColor(hex: "#FF9500") ?? .systemOrange,
+        NSColor(hex: "#FFCC00") ?? .systemYellow,
+        NSColor(hex: "#34C759") ?? .systemGreen,
+        NSColor(hex: "#007AFF") ?? .systemBlue,
+        NSColor(hex: "#AF52DE") ?? .systemPurple,
+        .white,
+        .black
+    ]
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            Text("\(annotationName) Properties")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(.primary)
+            
+            // Color Picker Grid
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Color").font(.system(size: 11, weight: .medium)).foregroundColor(.secondary)
+                
+                HStack(spacing: 8) {
+                    ForEach(availableColors, id: \.self) { color in
+                        Circle()
+                            .fill(Color(nsColor: color))
+                            .frame(width: 18, height: 18)
+                            .overlay(
+                                Circle()
+                                    .stroke(Color.primary.opacity(0.2), lineWidth: currentColor.hexString == color.hexString ? 0 : 1)
+                            )
+                            .overlay(
+                                Circle()
+                                    .stroke(Color.accentColor, lineWidth: currentColor.hexString == color.hexString ? 2 : 0)
+                                    .padding(-2)
+                            )
+                            .shadow(color: .black.opacity(0.1), radius: 1, y: 1)
+                            .onTapGesture {
+                                onColorChanged(color)
+                            }
+                    }
+                }
+            }
+            
+            // Stroke Width Slider (Not for text)
+            if annotationType != .text {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Text("Stroke Width").font(.system(size: 11, weight: .medium)).foregroundColor(.secondary)
+                        Spacer()
+                        Text("\(Int(localStrokeWidth)) pt").font(.system(size: 11)).foregroundColor(.secondary)
+                    }
+                    
+                    TaperedStrokeSlider(value: $localStrokeWidth, range: 1...50) { isEditing in
+                        if !isEditing {
+                            onStrokeWidthChanged(localStrokeWidth)
+                        }
+                    }
+                    .onChange(of: localStrokeWidth) { newValue in
+                        onStrokeWidthChanged(newValue)
+                    }
+                }
+            }
+            
+            // Fill Style Dropdown (if supported)
+            if annotationType == .rectangle || annotationType == .oval || annotationType == .text {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Fill Style").font(.system(size: 11, weight: .medium)).foregroundColor(.secondary)
+                    Picker("", selection: Binding(
+                        get: { currentFillStyle },
+                        set: { onFillStyleChanged($0) }
+                    )) {
+                        Text("Hollow").tag(ShapeFillStyle.hollow)
+                        Text("Translucent").tag(ShapeFillStyle.translucent)
+                        Text("Filled").tag(ShapeFillStyle.filled)
+                    }
+                    .pickerStyle(SegmentedPickerStyle())
+                    .labelsHidden()
+                }
+            }
+        }
+        .padding(16)
+        .frame(width: 260)
+        .background(
+            VisualEffectView(material: .hudWindow, blendingMode: .behindWindow)
+                .clipShape(RoundedRectangle(cornerRadius: 16))
+                .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.white.opacity(0.2), lineWidth: 1))
+                .shadow(color: Color.black.opacity(0.25), radius: 15, x: 0, y: 8)
+        )
+        .contentShape(Rectangle()) // Capture clicks anywhere on the panel
+        .onTapGesture {}
+        // Ensure SwiftUI handles mouse clicks properly on the Mac transparent window
+        .onHover { _ in NSCursor.arrow.push() }
+        .onAppear {
+            localStrokeWidth = currentStrokeWidth
+        }
+        .onChange(of: currentStrokeWidth) { newValue in
+            localStrokeWidth = newValue
+        }
+    }
+    
+    private var annotationName: String {
+        switch annotationType {
+        case .arrow: return "Arrow"
+        case .rectangle: return "Rectangle"
+        case .oval: return "Oval"
+        case .text: return "Text"
+        case .pen: return "Pen"
+        case .laserPointer, .laserPen: return "Laser"
+        case .select: return "Selection"
         }
     }
 }

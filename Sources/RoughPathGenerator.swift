@@ -29,7 +29,7 @@ class RoughPathGenerator {
         var random = SeededRandom(seed: annotation.roughnessSeed &+ UInt32(pass * 4200))
         
         switch annotation.type {
-        case .pen, .laser:
+        case .pen, .laserPen:
             guard annotation.points.count >= 2 else { return path }
             path.move(to: annotation.points[0])
             for i in 1..<annotation.points.count {
@@ -105,7 +105,7 @@ class RoughPathGenerator {
             guard let rect = annotation.rect else { return path }
             path.appendOval(in: rect)
             
-        case .text, .select:
+        case .text, .select, .laserPointer:
             break
         }
         

@@ -1,5 +1,50 @@
 import SwiftUI
 
+struct CustomTooltipModifier: ViewModifier {
+    let text: String
+    @State private var isHovered = false
+    
+    func body(content: Content) -> some View {
+        content
+            .onHover { hovered in
+                withAnimation(.easeInOut(duration: 0.1)) {
+                    isHovered = hovered
+                }
+            }
+            .overlay(
+                Group {
+                    if isHovered {
+                        Text(text)
+                            .font(.system(size: 12, weight: .medium))
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(
+                                VisualEffectView(material: .popover, blendingMode: .withinWindow)
+                            )
+                            .foregroundColor(.primary)
+                            .cornerRadius(10)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .stroke(Color.primary.opacity(0.1), lineWidth: 1)
+                            )
+                            .shadow(color: .black.opacity(0.15), radius: 6, y: 3)
+                            .fixedSize()
+                            .offset(y: 38)
+                            .transition(.opacity)
+                            .zIndex(100)
+                    }
+                }
+                , alignment: .bottom
+            )
+    }
+}
+
+extension View {
+    func customTooltip(_ text: String) -> some View {
+        self.modifier(CustomTooltipModifier(text: text))
+    }
+}
+
 struct FloatingToolbarView: View {
     weak var overlayController: OverlayWindowController?
     @ObservedObject var toolManager: ToolManager
@@ -23,6 +68,7 @@ struct FloatingToolbarView: View {
                 ToolButton(tool: tool, isActive: toolManager.activeTool == tool) {
                     toolManager.activeTool = tool
                 }
+                .customTooltip("\(tool.name) (\(tool.keyEquivalent))")
             }
             
             Divider()
@@ -58,6 +104,7 @@ struct FloatingToolbarView: View {
                 Image(systemName: "lineweight")
             }
             .frame(width: 40)
+            .customTooltip("Stroke Width")
             
             Divider()
                 .frame(height: 24)
@@ -69,7 +116,7 @@ struct FloatingToolbarView: View {
                 Image(systemName: "arrow.uturn.backward")
             }
             .buttonStyle(PlainButtonStyle())
-            .help("Undo (Cmd+Z)")
+            .customTooltip("Undo (Cmd+Z)")
             
             Button(action: {
                 overlayController?.clearCanvas()
@@ -77,16 +124,16 @@ struct FloatingToolbarView: View {
                 Image(systemName: "trash")
             }
             .buttonStyle(PlainButtonStyle())
-            .help("Clear (C)")
+            .customTooltip("Clear (C)")
             
             Button(action: {
                 overlayController?.toggleOverlay()
             }) {
                 Image(systemName: "xmark.circle.fill")
-                    .foregroundColor(.gray)
+                    .foregroundColor(.primary)
             }
             .buttonStyle(PlainButtonStyle())
-            .help("Close (Esc)")
+            .customTooltip("Close (Esc)")
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
@@ -100,7 +147,6 @@ struct FloatingToolbarView: View {
         .onHover { _ in NSCursor.arrow.push() }
     }
 }
-
 // Helper to use NSVisualEffectView in SwiftUI
 struct VisualEffectView: NSViewRepresentable {
     var material: NSVisualEffectView.Material
@@ -137,6 +183,5 @@ struct ToolButton: View {
                 )
         }
         .buttonStyle(PlainButtonStyle())
-        .help("\(tool.rawValue.capitalized) (\(tool.keyEquivalent.uppercased()))")
     }
 }

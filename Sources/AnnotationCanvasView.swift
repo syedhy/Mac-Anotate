@@ -530,41 +530,12 @@ class AnnotationCanvasView: NSView, NSTextFieldDelegate {
     }
     
     private func promptForClear() {
-        let alert = NSAlert()
-        alert.messageText = "Clear all annotations?"
-        alert.informativeText = "This action cannot be undone."
-        alert.addButton(withTitle: "Clear")
-        alert.addButton(withTitle: "Cancel")
-        
-        // Ensure the alert appears on top of the overlay window
-        alert.window.level = NSWindow.Level(rawValue: NSWindow.Level.screenSaver.rawValue + 1)
-        
-        // Bring the alert window to the front and make it key so it accepts keyboard input
-        alert.window.makeKeyAndOrderFront(nil)
-        
-        // Workaround to allow arrow keys to switch between buttons in NSAlert
-        // We can add a local event monitor while the alert is running
-        var selectedButtonIndex = 1 // Default is Cancel (index 1), Clear is 0. Actually default button is always index 0 ("Clear")
-        let monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-            if event.keyCode == 123 || event.keyCode == 124 { // Left or Right arrow
-                // Toggle between 0 and 1
-                selectedButtonIndex = (selectedButtonIndex == 0) ? 1 : 0
-                alert.window.makeFirstResponder(alert.buttons[selectedButtonIndex])
-                return nil // Consume event
-            }
-            return event
-        }
-        
-        let response = alert.runModal()
-        
-        if let monitor = monitor {
-            NSEvent.removeMonitor(monitor)
-        }
-        
-        if response == .alertFirstButtonReturn {
+        if let overlay = self.window?.windowController as? OverlayWindowController {
+            overlay.showClearPrompt()
+        } else {
+            // Fallback just in case
             clear()
         }
-        window?.makeFirstResponder(self)
     }
     
     private var isDragging: Bool {

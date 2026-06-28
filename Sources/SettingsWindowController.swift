@@ -1,12 +1,13 @@
 import SwiftUI
 import Cocoa
+import Carbon
 
 class SettingsWindowController: NSWindowController {
     static let shared = SettingsWindowController()
     
     private init() {
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 480, height: 550),
+            contentRect: NSRect(x: 0, y: 0, width: 480, height: 600),
             styleMask: [.titled, .closable, .miniaturizable, .fullSizeContentView],
             backing: .buffered,
             defer: false
@@ -16,7 +17,7 @@ class SettingsWindowController: NSWindowController {
         window.center()
         window.setFrameAutosaveName("SettingsWindow")
         
-        let hostingView = NSHostingView(rootView: SettingsView().frame(minWidth: 480, minHeight: 550))
+        let hostingView = NSHostingView(rootView: SettingsView().frame(minWidth: 480, minHeight: 600))
         window.contentView = hostingView
         
         super.init(window: window)
@@ -35,6 +36,24 @@ class SettingsWindowController: NSWindowController {
 
 struct SettingsView: View {
     @ObservedObject var settings = SettingsStore.shared
+    
+    let availableColors: [NSColor] = [
+        NSColor(hex: "#FF3B30") ?? .systemRed,
+        NSColor(hex: "#FF9500") ?? .systemOrange,
+        NSColor(hex: "#FFCC00") ?? .systemYellow,
+        NSColor(hex: "#34C759") ?? .systemGreen,
+        NSColor(hex: "#007AFF") ?? .systemBlue,
+        NSColor(hex: "#AF52DE") ?? .systemPurple,
+        .white,
+        .black
+    ]
+    
+    let strokeWidths: [(name: String, width: CGFloat)] = [
+        ("Thin", 4),
+        ("Medium", 8),
+        ("Thick", 12),
+        ("Extra Thick", 20)
+    ]
     
     var body: some View {
         VStack(spacing: 0) {
@@ -59,35 +78,65 @@ struct SettingsView: View {
                 .padding(.bottom, 16)
                 
                 Section(header: Text("Appearance").font(.headline).padding(.bottom, 4)) {
-                    ColorPicker("Default Color", selection: Binding(
-                        get: { Color(nsColor: settings.lastSelectedColor) },
-                        set: { settings.lastSelectedColor = NSColor($0) }
-                    ))
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Default Color:")
+                        HStack(spacing: 12) {
+                            ForEach(availableColors, id: \.self) { color in
+                                Circle()
+                                    .fill(Color(nsColor: color))
+                                    .frame(width: 24, height: 24)
+                                    .overlay(
+                                        Circle()
+                                            .stroke(Color.primary, lineWidth: settings.lastSelectedColor.hexString == color.hexString ? 3 : 0)
+                                    )
+                                    .shadow(radius: 1)
+                                    .onTapGesture {
+                                        settings.lastSelectedColor = color
+                                    }
+                            }
+                        }
+                    }
+                    .padding(.bottom, 12)
                     
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Default Stroke Width: \(Int(settings.lastSelectedStrokeWidth))")
-                        Slider(value: $settings.lastSelectedStrokeWidth, in: 2...20, step: 1)
-                            .frame(maxWidth: 200)
+                        Text("Default Stroke Width:")
+                        
+                        HStack(spacing: 16) {
+                            ForEach(strokeWidths, id: \.name) { style in
+                                Button(action: {
+                                    settings.lastSelectedStrokeWidth = style.width
+                                }) {
+                                    Text(style.name)
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 6)
+                                        .background(settings.lastSelectedStrokeWidth == style.width ? Color.accentColor : Color.secondary.opacity(0.2))
+                                        .foregroundColor(settings.lastSelectedStrokeWidth == style.width ? .white : .primary)
+                                        .cornerRadius(6)
+                                }
+                                .buttonStyle(PlainButtonStyle())
+                            }
+                        }
                     }
-                    .padding(.top, 4)
                 }
                 .padding(.bottom, 16)
                 
                 Section(header: Text("Shortcuts").font(.headline).padding(.bottom, 4)) {
-                    HStack {
-                        Text("Global Activation Shortcut:")
-                        Spacer()
-                        Text("⌥ ⇧ L")
-                            .font(.system(.body, design: .monospaced))
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(Color.secondary.opacity(0.2))
-                            .cornerRadius(6)
-                    }
-                    
-                    VStack(alignment: .leading, spacing: 8) {
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack {
+                            Text("Global Activation:")
+                            Spacer()
+                            ShortcutRecorderView(
+                                keyCode: $settings.globalShortcutKeyCode,
+                                modifiers: $settings.globalShortcutModifiers
+                            ) {
+                                // Hotkey manager update is called via property observer or here
+                                HotkeyManager.shared.registerGlobalHotkey()
+                            }
+                        }
+                        
+                        Divider().padding(.vertical, 4)
+                        
                         Text("Tool Shortcuts (when active):")
-                            .padding(.top, 8)
                         
                         LazyVGrid(columns: [GridItem(.fixed(120)), GridItem(.flexible())], alignment: .leading, spacing: 6) {
                             ShortcutRow(key: "P", action: "Pen")
@@ -99,7 +148,6 @@ struct SettingsView: View {
                             ShortcutRow(key: "C", action: "Clear All")
                         }
                     }
-                    .padding(.top, 4)
                 }
             }
             .formStyle(.grouped)
@@ -115,6 +163,133 @@ struct SettingsView: View {
             .padding(16)
         }
         .background(Color(NSColor.windowBackgroundColor))
+    }
+}
+
+struct ShortcutRecorderView: View {
+    @Binding var keyCode: UInt32
+    @Binding var modifiers: UInt32
+    var onShortcutChanged: () -> Void
+    
+    @State private var isRecording = false
+    
+    var body: some View {
+        Button(action: {
+            isRecording.toggle()
+        }) {
+            Text(isRecording ? "Recording..." : shortcutString(keyCode: keyCode, modifiers: modifiers))
+                .font(.system(.body, design: .monospaced))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(isRecording ? Color.accentColor.opacity(0.2) : Color.secondary.opacity(0.2))
+                .foregroundColor(isRecording ? .accentColor : .primary)
+                .cornerRadius(6)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .stroke(isRecording ? Color.accentColor : Color.clear, lineWidth: 2)
+                )
+        }
+        .buttonStyle(PlainButtonStyle())
+        .background(ShortcutEventMonitor(isRecording: $isRecording, keyCode: $keyCode, modifiers: $modifiers, onChanged: onShortcutChanged))
+    }
+    
+    private func shortcutString(keyCode: UInt32, modifiers: UInt32) -> String {
+        var result = ""
+        let mods = Int(modifiers)
+        if (mods & controlKey) != 0 { result += "⌃ " }
+        if (mods & optionKey) != 0 { result += "⌥ " }
+        if (mods & shiftKey) != 0 { result += "⇧ " }
+        if (mods & cmdKey) != 0 { result += "⌘ " }
+        
+        if let char = keyString(for: keyCode) {
+            result += char.uppercased()
+        }
+        return result.isEmpty ? "Click to record" : result
+    }
+    
+    private func keyString(for keyCode: UInt32) -> String? {
+        let source = TISCopyCurrentASCIICapableKeyboardLayoutInputSource().takeRetainedValue()
+        let layoutData = TISGetInputSourceProperty(source, kTISPropertyUnicodeKeyLayoutData)
+        
+        guard let data = layoutData else { return nil }
+        
+        let keyboardLayout = unsafeBitCast(data, to: CFData.self)
+        var keysDown: UInt32 = 0
+        var chars: [UniChar] = [0, 0, 0, 0]
+        var length = 0
+        
+        UCKeyTranslate(
+            unsafeBitCast(CFDataGetBytePtr(keyboardLayout), to: UnsafePointer<UCKeyboardLayout>.self),
+            UInt16(keyCode),
+            UInt16(kUCKeyActionDown),
+            0,
+            UInt32(LMGetKbdType()),
+            OptionBits(kUCKeyTranslateNoDeadKeysBit),
+            &keysDown,
+            4,
+            &length,
+            &chars
+        )
+        
+        if length > 0 {
+            return String(utf16CodeUnits: chars, count: length)
+        }
+        return nil
+    }
+}
+
+struct ShortcutEventMonitor: NSViewRepresentable {
+    @Binding var isRecording: Bool
+    @Binding var keyCode: UInt32
+    @Binding var modifiers: UInt32
+    var onChanged: () -> Void
+    
+    func makeNSView(context: Context) -> NSView {
+        let view = MonitorView()
+        view.onKeyDown = { event in
+            if isRecording {
+                let flags = event.modifierFlags
+                
+                var carbonModifiers: Int = 0
+                if flags.contains(.control) { carbonModifiers |= controlKey }
+                if flags.contains(.option) { carbonModifiers |= optionKey }
+                if flags.contains(.shift) { carbonModifiers |= shiftKey }
+                if flags.contains(.command) { carbonModifiers |= cmdKey }
+                
+                // Disallow keys without modifiers
+                if carbonModifiers == 0 {
+                    isRecording = false
+                    return
+                }
+                
+                keyCode = UInt32(event.keyCode)
+                modifiers = UInt32(carbonModifiers)
+                isRecording = false
+                onChanged()
+            }
+        }
+        return view
+    }
+    
+    func updateNSView(_ nsView: NSView, context: Context) {}
+    
+    class MonitorView: NSView {
+        var onKeyDown: ((NSEvent) -> Void)?
+        private var monitor: Any?
+        
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            if window != nil {
+                monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+                    self?.onKeyDown?(event)
+                    // If we processed it, consume it so it doesn't beep
+                    return (self != nil && self!.window?.firstResponder is MonitorView) ? nil : event
+                }
+            } else if let monitor = monitor {
+                NSEvent.removeMonitor(monitor)
+                self.monitor = nil
+            }
+        }
     }
 }
 

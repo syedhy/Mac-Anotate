@@ -209,9 +209,11 @@ class AnnotationRenderer {
             }
             
             if annotation.fillStyle != .filled {
-                let strokePath = RoughPathGenerator.generateVariableStrokePath(from: annotation, pass: 0)
-                color.setFill()
-                strokePath.fill()
+                path1.lineWidth = annotation.strokeWidth
+                path1.lineCapStyle = .round
+                path1.lineJoinStyle = .round
+                color.setStroke()
+                path1.stroke()
             }
             
             // Selection handles will be drawn below

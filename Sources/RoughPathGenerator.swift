@@ -223,13 +223,11 @@ class RoughPathGenerator {
             y: baseMid.y - arrow.direction.y * baseBow
         )
 
-        var random = SeededRandom(seed: seed)
-        var headPoints: [CGPoint] = []
-        headPoints.append(contentsOf: sampleCubic(from: arrow.headPoint1, control1: leftControl1, control2: leftControl2, to: end, steps: 12).dropLast())
-        headPoints.append(contentsOf: sampleCubic(from: end, control1: rightControl1, control2: rightControl2, to: arrow.headPoint2, steps: 12).dropLast())
-        headPoints.append(contentsOf: sampleQuadratic(from: arrow.headPoint2, control: baseControl, to: arrow.headPoint1, steps: 14).dropLast())
-
-        appendVariablePolyline(to: path, points: headPoints, baseWidth: strokeWidth * 1.04, random: &random, closed: true, profile: .arrowHead)
+        path.move(to: arrow.headPoint1)
+        path.curve(to: end, controlPoint1: leftControl1, controlPoint2: leftControl2)
+        path.curve(to: arrow.headPoint2, controlPoint1: rightControl1, controlPoint2: rightControl2)
+        path.curve(to: arrow.headPoint1, controlPoint1: baseControl, controlPoint2: baseControl)
+        path.close()
         return path
     }
 
@@ -261,31 +259,17 @@ class RoughPathGenerator {
         )
 
         static let closedShape = WidthProfile(
-            initialMin: 0.88,
-            initialMax: 1.16,
-            targetMin: 0.80,
-            targetMax: 1.24,
-            clampMin: 0.82,
-            clampMax: 1.20,
-            driftMin: 0.18,
-            driftMax: 0.28,
-            wobble: 0.014,
-            holdMin: 9,
-            holdMax: 14
-        )
-
-        static let arrowHead = WidthProfile(
-            initialMin: 0.90,
-            initialMax: 1.14,
-            targetMin: 0.84,
-            targetMax: 1.22,
-            clampMin: 0.86,
-            clampMax: 1.18,
-            driftMin: 0.16,
-            driftMax: 0.26,
-            wobble: 0.012,
-            holdMin: 8,
-            holdMax: 12
+            initialMin: 0.96,
+            initialMax: 1.06,
+            targetMin: 0.92,
+            targetMax: 1.10,
+            clampMin: 0.94,
+            clampMax: 1.08,
+            driftMin: 0.12,
+            driftMax: 0.22,
+            wobble: 0.006,
+            holdMin: 12,
+            holdMax: 18
         )
     }
 
@@ -469,8 +453,8 @@ class RoughPathGenerator {
             finalControl = CGPoint(x: baseControl.x + varX, y: baseControl.y + varY)
         }
 
-        let headLength = strokeWidth * 5.15
-        let headWidth = strokeWidth * 4.35
+        let headLength = strokeWidth * 5.35
+        let headWidth = strokeWidth * 4.75
         let dxCtrl = end.x - finalControl.x
         let dyCtrl = end.y - finalControl.y
         let angle = atan2(dyCtrl, dxCtrl)

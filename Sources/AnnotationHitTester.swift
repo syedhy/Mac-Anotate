@@ -195,13 +195,7 @@ struct AnnotationHitTester {
         case .rectangle, .oval:
             return annotation.rect ?? .zero
         case .arrow:
-            guard let start = annotation.arrowStart, let end = annotation.arrowEnd else { return .zero }
-            let cp = annotation.arrowControlPoint ?? CGPoint(x: (start.x + end.x) / 2, y: (start.y + end.y) / 2)
-            let minX = min(start.x, min(end.x, cp.x))
-            let maxX = max(start.x, max(end.x, cp.x))
-            let minY = min(start.y, min(end.y, cp.y))
-            let maxY = max(start.y, max(end.y, cp.y))
-            return CGRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)
+            return getRenderedArrowBoundingBox(for: annotation)
         case .pen, .laserPen:
             guard !annotation.points.isEmpty else { return .zero }
             var minX = annotation.points[0].x
@@ -220,6 +214,20 @@ struct AnnotationHitTester {
         default:
             return .zero
         }
+    }
+
+    private static func getRenderedArrowBoundingBox(for annotation: Annotation) -> CGRect {
+        guard annotation.arrowStart != nil, annotation.arrowEnd != nil else { return .zero }
+
+        let shaftPath = RoughPathGenerator.generateVariableStrokePath(from: annotation, pass: 0)
+        var boundingBox = shaftPath.bounds
+
+        let headPath = RoughPathGenerator.generateArrowHeadStrokePath(from: annotation, pass: 0)
+        let headStrokePadding = annotation.dynamicArrowStrokeWidth * 1.18 / 2
+        let headBox = headPath.bounds.insetBy(dx: -headStrokePadding, dy: -headStrokePadding)
+        boundingBox = boundingBox.isEmpty ? headBox : boundingBox.union(headBox)
+
+        return boundingBox
     }
     
     static func getGroupBoundingBox(for annotations: [Annotation], selectedIDs: Set<UUID>) -> CGRect? {

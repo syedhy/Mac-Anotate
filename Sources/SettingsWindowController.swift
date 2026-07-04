@@ -12,7 +12,7 @@ class SettingsWindowController: NSWindowController {
             backing: .buffered,
             defer: false
         )
-        window.title = "Anotate Settings"
+        window.title = "Mac Annotate Settings"
         window.titlebarAppearsTransparent = true
         window.center()
         window.setFrameAutosaveName("SettingsWindow")

@@ -12,7 +12,6 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
     private var laserTimer: Timer?
     
     private var editingTextIndex: Int?
-    private var activeTextField: NSTextField?
     private var activeTextView: NSTextView?
     private var trackingArea: NSTrackingArea?
     private var cancellables = Set<AnyCancellable>()
@@ -43,7 +42,7 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
     private func setup() {
         wantsLayer = true
         layer?.backgroundColor = NSColor.clear.cgColor
-        
+
         propertiesHostingView = NSHostingView(rootView: AnyView(EmptyView()))
         propertiesHostingView.isHidden = true
         propertiesHostingView.translatesAutoresizingMaskIntoConstraints = false
@@ -98,16 +97,28 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
     }
     
     func clear() {
+        activeTextView?.removeFromSuperview()
+        activeTextView = nil
+        editingTextIndex = nil
         annotations.removeAll()
         currentAnnotation = nil
+        hoveredAnnotationID = nil
+        marqueeRect = nil
+        interactionState = .idle
+        SelectionManager.shared.clearSelection()
         needsDisplay = true
     }
     
     func undo() {
-        if !annotations.isEmpty {
-            annotations.removeLast()
-            needsDisplay = true
+        guard let removed = annotations.popLast() else { return }
+
+        if SelectionManager.shared.selectedAnnotationIDs.contains(removed.id) {
+            SelectionManager.shared.clearSelection()
         }
+        if hoveredAnnotationID == removed.id {
+            hoveredAnnotationID = nil
+        }
+        needsDisplay = true
     }
     
     override func keyDown(with event: NSEvent) {
@@ -1044,8 +1055,6 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
         }
         
         let annotation = annotations[index]
-        let boundingBox = AnnotationHitTester.getBoundingBox(for: annotation)
-        
         let view = SelectionPropertiesPanel(
             annotationType: annotation.type,
             currentColor: annotation.color,

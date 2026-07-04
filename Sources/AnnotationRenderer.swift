@@ -90,7 +90,6 @@ class AnnotationRenderer {
         NSGraphicsContext.current = nsContext
         
         let isSelected = SelectionManager.shared.selectedAnnotationIDs.contains(annotation.id)
-        let isGroupSelected = isSelected && SelectionManager.shared.selectedAnnotationIDs.count > 1
         let shouldGlow = isSelected && SelectionManager.shared.wasMarqueeSelected
         
         // Add subtle shadow or glow

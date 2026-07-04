@@ -7,6 +7,7 @@ class HotkeyManager {
     var onHotkeyPressed: (() -> Void)?
     
     private var hotKeyRef: EventHotKeyRef?
+    private var eventHandlerRef: EventHandlerRef?
     
     private init() {}
     
@@ -23,12 +24,16 @@ class HotkeyManager {
         eventType.eventKind = OSType(kEventHotKeyPressed)
         
         let handler: EventHandlerUPP = { (nextHandler, theEvent, userData) -> OSStatus in
-            print("Anotate: Hotkey pressed!")
+            print("Mac Annotate: Hotkey pressed!")
             HotkeyManager.shared.onHotkeyPressed?()
             return noErr
         }
         
-        InstallEventHandler(GetApplicationEventTarget(), handler, 1, &eventType, nil, nil)
+        let handlerStatus = InstallEventHandler(GetApplicationEventTarget(), handler, 1, &eventType, nil, &eventHandlerRef)
+        if handlerStatus != noErr {
+            print("Error installing global hotkey handler: \(handlerStatus)")
+            return
+        }
         
         let keyCode = SettingsStore.shared.globalShortcutKeyCode
         let modifiers = SettingsStore.shared.globalShortcutModifiers
@@ -46,6 +51,10 @@ class HotkeyManager {
         if let ref = hotKeyRef {
             UnregisterEventHotKey(ref)
             hotKeyRef = nil
+        }
+        if let ref = eventHandlerRef {
+            RemoveEventHandler(ref)
+            eventHandlerRef = nil
         }
     }
 }

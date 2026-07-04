@@ -1,14 +1,17 @@
 #!/bin/bash
 set -e
 
+APP_NAME="Mac Annotate"
+DERIVED_DATA_PATH="${TMPDIR:-/tmp}/mac-annotate-derived-data"
+APP_PATH="$DERIVED_DATA_PATH/Build/Products/Debug/$APP_NAME.app"
+
 # Build the project
-echo "Building Mac Annotate..."
-xcodebuild build -scheme "Mac Annotate" -destination 'platform=macOS' -quiet
+echo "Building $APP_NAME..."
+rm -rf "$DERIVED_DATA_PATH"
+xcodebuild build -scheme "$APP_NAME" -destination 'platform=macOS' -derivedDataPath "$DERIVED_DATA_PATH" -quiet
 
-APP_PATH=$(find ~/Library/Developer/Xcode/DerivedData -name "Mac Annotate.app" -type d | grep "Products/Debug/Mac Annotate.app" | grep -v "Index.noindex" | head -n 1)
-
-if [ -z "$APP_PATH" ]; then
-    echo "Could not find Mac Annotate.app in DerivedData!"
+if [ ! -d "$APP_PATH" ]; then
+    echo "Could not find $APP_NAME.app at expected path: $APP_PATH"
     exit 1
 fi
 
@@ -16,12 +19,13 @@ echo "Found built app at: $APP_PATH"
 
 # Copy to Applications
 echo "Copying to /Applications..."
-rm -rf "/Applications/Mac Annotate.app"
+rm -rf "/Applications/$APP_NAME.app"
 cp -R "$APP_PATH" /Applications/
 
 # Kill and Restart
-echo "Restarting Mac Annotate..."
-killall "Mac Annotate" || true
-open "/Applications/Mac Annotate.app"
+echo "Restarting $APP_NAME..."
+killall "$APP_NAME" || true
+sleep 0.5
+open -n "/Applications/$APP_NAME.app"
 
 echo "Done!"

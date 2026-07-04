@@ -6,13 +6,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var overlayWindowController: OverlayWindowController?
     
     func applicationDidFinishLaunching(_ aNotification: Notification) {
-        print("Anotate: applicationDidFinishLaunching called.")
+        print("Mac Annotate: applicationDidFinishLaunching called.")
         // Create the overlay window controller
         overlayWindowController = OverlayWindowController()
         
         // Setup menu bar
         menuBarController = MenuBarController(overlayController: overlayWindowController)
-        print("Anotate: MenuBarController initialized.")
+        print("Mac Annotate: MenuBarController initialized.")
         
         // Initialize HotkeyManager to listen for the global shortcut
         HotkeyManager.shared.onHotkeyPressed = { [weak self] in

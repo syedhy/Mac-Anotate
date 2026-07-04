@@ -13,7 +13,7 @@ class MenuBarController {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         
         if let button = statusItem.button {
-            if let image = NSImage(systemSymbolName: "pencil", accessibilityDescription: "Anotate") {
+            if let image = NSImage(systemSymbolName: "pencil", accessibilityDescription: "Mac Annotate") {
                 image.isTemplate = true
                 button.image = image
             } else {

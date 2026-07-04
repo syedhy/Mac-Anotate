@@ -118,9 +118,6 @@ struct AnnotationHitTester {
         case .arrow:
             guard let start = annotation.arrowStart, let end = annotation.arrowEnd else { return nil }
             let control = annotation.arrowControlPoint ?? CGPoint(x: (start.x + end.x)/2, y: (start.y + end.y)/2)
-            let dx = end.x - start.x
-            let dy = end.y - start.y
-            let length = hypot(dx, dy)
             let strokeW = annotation.dynamicArrowStrokeWidth
             let headL = strokeW * 3.5
             let dxCtrl = end.x - control.x
@@ -144,7 +141,6 @@ struct AnnotationHitTester {
 
             return [insetStart, m, insetEnd]
         case .rectangle, .oval, .text:
-            let rect: CGRect
             if annotation.type == .text {
                 guard let r = annotation.textRect else { return nil }
                 return [

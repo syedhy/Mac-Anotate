@@ -179,10 +179,17 @@ class AnnotationRenderer {
             color.setFill()
             path1.fill()
         } else if annotation.type == .arrow {
+            context.beginTransparencyLayer(auxiliaryInfo: nil)
+
             let arrowPath = RoughPathGenerator.generateVariableStrokePath(from: annotation, pass: 0)
-            arrowPath.append(RoughPathGenerator.generateArrowHeadStrokePath(from: annotation, pass: 0))
             color.setFill()
             arrowPath.fill()
+
+            let headPath = RoughPathGenerator.generateArrowHeadStrokePath(from: annotation, pass: 0)
+            color.setFill()
+            headPath.fill()
+
+            context.endTransparencyLayer()
         } else if annotation.type == .rectangle || annotation.type == .oval {
             let path1 = RoughPathGenerator.generateDoodlePath(from: annotation, pass: 0)
             

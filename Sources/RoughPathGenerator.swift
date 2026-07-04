@@ -193,34 +193,43 @@ class RoughPathGenerator {
             return path
         }
 
-        var random = SeededRandom(seed: seed)
         let strokeWidth = annotation.dynamicArrowStrokeWidth
         let baseMid = CGPoint(
             x: (arrow.headPoint1.x + arrow.headPoint2.x) / 2,
             y: (arrow.headPoint1.y + arrow.headPoint2.y) / 2
         )
-        let baseBow = max(2.0, strokeWidth * 0.46)
-        let shoulderBow = max(1.5, strokeWidth * 0.30)
+        let headLength = distance(from: baseMid, to: end)
+        let baseBow = max(2.0, strokeWidth * 0.58)
+        let shoulderBow = max(1.5, strokeWidth * 0.20)
 
-        let leftControl = CGPoint(
-            x: (arrow.headPoint1.x + end.x) / 2 - arrow.normal.x * shoulderBow,
-            y: (arrow.headPoint1.y + end.y) / 2 - arrow.normal.y * shoulderBow
+        let leftControl1 = CGPoint(
+            x: arrow.headPoint1.x + arrow.direction.x * headLength * 0.38 - arrow.normal.x * shoulderBow,
+            y: arrow.headPoint1.y + arrow.direction.y * headLength * 0.38 - arrow.normal.y * shoulderBow
         )
-        let rightControl = CGPoint(
-            x: (arrow.headPoint2.x + end.x) / 2 + arrow.normal.x * shoulderBow,
-            y: (arrow.headPoint2.y + end.y) / 2 + arrow.normal.y * shoulderBow
+        let leftControl2 = CGPoint(
+            x: end.x - arrow.direction.x * headLength * 0.24 - arrow.normal.x * shoulderBow,
+            y: end.y - arrow.direction.y * headLength * 0.24 - arrow.normal.y * shoulderBow
+        )
+        let rightControl1 = CGPoint(
+            x: end.x - arrow.direction.x * headLength * 0.24 + arrow.normal.x * shoulderBow,
+            y: end.y - arrow.direction.y * headLength * 0.24 + arrow.normal.y * shoulderBow
+        )
+        let rightControl2 = CGPoint(
+            x: arrow.headPoint2.x + arrow.direction.x * headLength * 0.38 + arrow.normal.x * shoulderBow,
+            y: arrow.headPoint2.y + arrow.direction.y * headLength * 0.38 + arrow.normal.y * shoulderBow
         )
         let baseControl = CGPoint(
             x: baseMid.x - arrow.direction.x * baseBow,
             y: baseMid.y - arrow.direction.y * baseBow
         )
 
+        var random = SeededRandom(seed: seed)
         var headPoints: [CGPoint] = []
-        headPoints.append(contentsOf: sampleQuadratic(from: arrow.headPoint1, control: leftControl, to: end, steps: 6).dropLast())
-        headPoints.append(contentsOf: sampleQuadratic(from: end, control: rightControl, to: arrow.headPoint2, steps: 6).dropLast())
-        headPoints.append(contentsOf: sampleQuadratic(from: arrow.headPoint2, control: baseControl, to: arrow.headPoint1, steps: 7).dropLast())
+        headPoints.append(contentsOf: sampleCubic(from: arrow.headPoint1, control1: leftControl1, control2: leftControl2, to: end, steps: 12).dropLast())
+        headPoints.append(contentsOf: sampleCubic(from: end, control1: rightControl1, control2: rightControl2, to: arrow.headPoint2, steps: 12).dropLast())
+        headPoints.append(contentsOf: sampleQuadratic(from: arrow.headPoint2, control: baseControl, to: arrow.headPoint1, steps: 14).dropLast())
 
-        appendVariablePolyline(to: path, points: headPoints, baseWidth: strokeWidth * 1.02, random: &random, closed: true, profile: .arrowHead)
+        appendVariablePolyline(to: path, points: headPoints, baseWidth: strokeWidth * 1.04, random: &random, closed: true, profile: .arrowHead)
         return path
     }
 
@@ -239,44 +248,44 @@ class RoughPathGenerator {
 
         static let stroke = WidthProfile(
             initialMin: 0.76,
-            initialMax: 1.32,
-            targetMin: 0.62,
-            targetMax: 1.48,
-            clampMin: 0.68,
-            clampMax: 1.40,
-            driftMin: 0.30,
-            driftMax: 0.46,
-            wobble: 0.04,
-            holdMin: 4,
-            holdMax: 7
+            initialMax: 1.26,
+            targetMin: 0.68,
+            targetMax: 1.38,
+            clampMin: 0.72,
+            clampMax: 1.34,
+            driftMin: 0.26,
+            driftMax: 0.40,
+            wobble: 0.026,
+            holdMin: 5,
+            holdMax: 8
         )
 
         static let closedShape = WidthProfile(
-            initialMin: 0.84,
-            initialMax: 1.22,
-            targetMin: 0.72,
-            targetMax: 1.34,
-            clampMin: 0.76,
-            clampMax: 1.30,
-            driftMin: 0.22,
-            driftMax: 0.36,
-            wobble: 0.022,
-            holdMin: 7,
-            holdMax: 11
+            initialMin: 0.88,
+            initialMax: 1.16,
+            targetMin: 0.80,
+            targetMax: 1.24,
+            clampMin: 0.82,
+            clampMax: 1.20,
+            driftMin: 0.18,
+            driftMax: 0.28,
+            wobble: 0.014,
+            holdMin: 9,
+            holdMax: 14
         )
 
         static let arrowHead = WidthProfile(
             initialMin: 0.90,
-            initialMax: 1.16,
-            targetMin: 0.82,
-            targetMax: 1.24,
-            clampMin: 0.84,
-            clampMax: 1.22,
-            driftMin: 0.18,
-            driftMax: 0.30,
-            wobble: 0.018,
-            holdMin: 6,
-            holdMax: 10
+            initialMax: 1.14,
+            targetMin: 0.84,
+            targetMax: 1.22,
+            clampMin: 0.86,
+            clampMax: 1.18,
+            driftMin: 0.16,
+            driftMax: 0.26,
+            wobble: 0.012,
+            holdMin: 8,
+            holdMax: 12
         )
     }
 
@@ -352,15 +361,12 @@ class RoughPathGenerator {
 
         if closed {
             path.move(to: leftPoints[0])
-            for index in 1..<leftPoints.count {
-                path.line(to: leftPoints[index])
-            }
-            path.line(to: leftPoints[0])
+            appendSmoothCurve(to: path, points: leftPoints, closed: true, movesToStart: false)
             path.line(to: rightPoints[0])
-            for index in (1..<rightPoints.count).reversed() {
-                path.line(to: rightPoints[index])
-            }
-            path.line(to: rightPoints[0])
+            var reversedRight = [rightPoints[0]]
+            reversedRight.append(contentsOf: rightPoints.dropFirst().reversed())
+            reversedRight.append(rightPoints[0])
+            appendSmoothCurve(to: path, points: reversedRight, closed: false, movesToStart: false)
             path.close()
             return
         }
@@ -375,9 +381,7 @@ class RoughPathGenerator {
             controlPoint2: CGPoint(x: leftPoints[0].x - startTangent.x * startRadius * 1.3, y: leftPoints[0].y - startTangent.y * startRadius * 1.3)
         )
 
-        for index in 1..<leftPoints.count {
-            path.line(to: leftPoints[index])
-        }
+        appendSmoothCurve(to: path, points: leftPoints, closed: false, movesToStart: false)
 
         let endRadius = widths[widths.count - 1] / 2
         let endTangent = tangents[tangents.count - 1]
@@ -387,11 +391,39 @@ class RoughPathGenerator {
             controlPoint2: CGPoint(x: rightPoints[rightPoints.count - 1].x + endTangent.x * endRadius * 1.3, y: rightPoints[rightPoints.count - 1].y + endTangent.y * endRadius * 1.3)
         )
 
-        for index in (0..<(rightPoints.count - 1)).reversed() {
-            path.line(to: rightPoints[index])
-        }
+        appendSmoothCurve(to: path, points: Array(rightPoints.reversed()), closed: false, movesToStart: false)
 
         path.close()
+    }
+
+    private static func appendSmoothCurve(to path: NSBezierPath, points: [CGPoint], closed: Bool, movesToStart: Bool) {
+        guard points.count > 1 else { return }
+
+        if movesToStart {
+            path.move(to: points[0])
+        }
+
+        let segmentCount = closed ? points.count : points.count - 1
+        for index in 0..<segmentCount {
+            let p0 = closed ? points[(index - 1 + points.count) % points.count] : points[max(index - 1, 0)]
+            let p1 = points[index]
+            let p2 = points[(index + 1) % points.count]
+            let p3 = closed ? points[(index + 2) % points.count] : points[min(index + 2, points.count - 1)]
+
+            let cp1 = CGPoint(
+                x: p1.x + (p2.x - p0.x) / 6,
+                y: p1.y + (p2.y - p0.y) / 6
+            )
+            let cp2 = CGPoint(
+                x: p2.x - (p3.x - p1.x) / 6,
+                y: p2.y - (p3.y - p1.y) / 6
+            )
+            path.curve(to: p2, controlPoint1: cp1, controlPoint2: cp2)
+        }
+    }
+
+    private static func distance(from start: CGPoint, to end: CGPoint) -> CGFloat {
+        hypot(end.x - start.x, end.y - start.y)
     }
 
     private static func normalized(_ point: CGPoint) -> CGPoint {
@@ -437,8 +469,8 @@ class RoughPathGenerator {
             finalControl = CGPoint(x: baseControl.x + varX, y: baseControl.y + varY)
         }
 
-        let headLength = strokeWidth * 4.85
-        let headWidth = strokeWidth * 4.05
+        let headLength = strokeWidth * 5.15
+        let headWidth = strokeWidth * 4.35
         let dxCtrl = end.x - finalControl.x
         let dyCtrl = end.y - finalControl.y
         let angle = atan2(dyCtrl, dxCtrl)
@@ -483,6 +515,23 @@ class RoughPathGenerator {
             return CGPoint(
                 x: oneMinusT * oneMinusT * start.x + 2 * oneMinusT * t * control.x + t * t * end.x,
                 y: oneMinusT * oneMinusT * start.y + 2 * oneMinusT * t * control.y + t * t * end.y
+            )
+        }
+    }
+
+    private static func sampleCubic(from start: CGPoint, control1: CGPoint, control2: CGPoint, to end: CGPoint, steps: Int) -> [CGPoint] {
+        (0...steps).map { index in
+            let t = CGFloat(index) / CGFloat(steps)
+            let oneMinusT = 1.0 - t
+            return CGPoint(
+                x: oneMinusT * oneMinusT * oneMinusT * start.x
+                    + 3 * oneMinusT * oneMinusT * t * control1.x
+                    + 3 * oneMinusT * t * t * control2.x
+                    + t * t * t * end.x,
+                y: oneMinusT * oneMinusT * oneMinusT * start.y
+                    + 3 * oneMinusT * oneMinusT * t * control1.y
+                    + 3 * oneMinusT * t * t * control2.y
+                    + t * t * t * end.y
             )
         }
     }

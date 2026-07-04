@@ -174,16 +174,15 @@ class AnnotationRenderer {
             color.setStroke()
             path.stroke()
             
-        } else if annotation.type == .pen || annotation.type == .arrow {
+        } else if annotation.type == .pen {
             let path1 = RoughPathGenerator.generateVariableStrokePath(from: annotation, pass: 0)
             color.setFill()
             path1.fill()
-
-            if annotation.type == .arrow {
-                let headPath = RoughPathGenerator.generateArrowHeadStrokePath(from: annotation, pass: 0)
-                color.setFill()
-                headPath.fill()
-            }
+        } else if annotation.type == .arrow {
+            let arrowPath = RoughPathGenerator.generateVariableStrokePath(from: annotation, pass: 0)
+            arrowPath.append(RoughPathGenerator.generateArrowHeadStrokePath(from: annotation, pass: 0))
+            color.setFill()
+            arrowPath.fill()
         } else if annotation.type == .rectangle || annotation.type == .oval {
             let path1 = RoughPathGenerator.generateDoodlePath(from: annotation, pass: 0)
             

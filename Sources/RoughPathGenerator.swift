@@ -146,15 +146,15 @@ class RoughPathGenerator {
         switch annotation.type {
         case .pen:
             let smoothedPoints = smoothPointsChaikin(annotation.points, iterations: 1)
-            appendVariablePolyline(to: path, points: smoothedPoints, baseWidth: annotation.strokeWidth, random: &random, closed: false)
+            appendVariablePolyline(to: path, points: smoothedPoints, baseWidth: annotation.strokeWidth, random: &random, closed: false, profile: .stroke)
         case .arrow:
             appendVariableArrow(to: path, annotation: annotation, random: &random)
         case .rectangle:
             guard let rect = annotation.rect, rect.width > 1, rect.height > 1 else { return path }
-            appendVariablePolyline(to: path, points: rectangleOutlinePoints(for: rect), baseWidth: annotation.strokeWidth, random: &random, closed: true)
+            appendVariablePolyline(to: path, points: rectangleOutlinePoints(for: rect), baseWidth: annotation.strokeWidth, random: &random, closed: true, profile: .closedShape)
         case .oval:
             guard let rect = annotation.rect, rect.width > 1, rect.height > 1 else { return path }
-            appendVariablePolyline(to: path, points: ovalOutlinePoints(for: rect), baseWidth: annotation.strokeWidth, random: &random, closed: true)
+            appendVariablePolyline(to: path, points: ovalOutlinePoints(for: rect), baseWidth: annotation.strokeWidth, random: &random, closed: true, profile: .closedShape)
         default:
             break
         }
@@ -220,72 +220,191 @@ class RoughPathGenerator {
         headPoints.append(contentsOf: sampleQuadratic(from: end, control: rightControl, to: arrow.headPoint2, steps: 6).dropLast())
         headPoints.append(contentsOf: sampleQuadratic(from: arrow.headPoint2, control: baseControl, to: arrow.headPoint1, steps: 7).dropLast())
 
-        appendVariablePolyline(to: path, points: headPoints, baseWidth: strokeWidth * 1.08, random: &random, closed: true)
+        appendVariablePolyline(to: path, points: headPoints, baseWidth: strokeWidth * 1.02, random: &random, closed: true, profile: .arrowHead)
         return path
     }
 
-    private static func variableWidths(count: Int, baseWidth: CGFloat, random: inout SeededRandom) -> [CGFloat] {
+    private struct WidthProfile {
+        let initialMin: CGFloat
+        let initialMax: CGFloat
+        let targetMin: CGFloat
+        let targetMax: CGFloat
+        let clampMin: CGFloat
+        let clampMax: CGFloat
+        let driftMin: CGFloat
+        let driftMax: CGFloat
+        let wobble: CGFloat
+        let holdMin: UInt32
+        let holdMax: UInt32
+
+        static let stroke = WidthProfile(
+            initialMin: 0.76,
+            initialMax: 1.32,
+            targetMin: 0.62,
+            targetMax: 1.48,
+            clampMin: 0.68,
+            clampMax: 1.40,
+            driftMin: 0.30,
+            driftMax: 0.46,
+            wobble: 0.04,
+            holdMin: 4,
+            holdMax: 7
+        )
+
+        static let closedShape = WidthProfile(
+            initialMin: 0.84,
+            initialMax: 1.22,
+            targetMin: 0.72,
+            targetMax: 1.34,
+            clampMin: 0.76,
+            clampMax: 1.30,
+            driftMin: 0.22,
+            driftMax: 0.36,
+            wobble: 0.022,
+            holdMin: 7,
+            holdMax: 11
+        )
+
+        static let arrowHead = WidthProfile(
+            initialMin: 0.90,
+            initialMax: 1.16,
+            targetMin: 0.82,
+            targetMax: 1.24,
+            clampMin: 0.84,
+            clampMax: 1.22,
+            driftMin: 0.18,
+            driftMax: 0.30,
+            wobble: 0.018,
+            holdMin: 6,
+            holdMax: 10
+        )
+    }
+
+    private static func variableWidths(count: Int, baseWidth: CGFloat, random: inout SeededRandom, profile: WidthProfile) -> [CGFloat] {
         guard count > 0 else { return [] }
 
-        var multiplier = random.nextFloat(in: 0.78...1.30)
-        var target = random.nextFloat(in: 0.68...1.42)
-        var targetCountdown = Int(random.next() % 4) + 4
+        var multiplier = random.nextFloat(in: profile.initialMin...profile.initialMax)
+        var target = random.nextFloat(in: profile.targetMin...profile.targetMax)
+        var targetCountdown = nextTargetHold(random: &random, profile: profile)
 
         return (0..<count).map { _ in
             if targetCountdown == 0 {
-                target = random.nextFloat(in: 0.68...1.42)
-                targetCountdown = Int(random.next() % 4) + 4
+                target = random.nextFloat(in: profile.targetMin...profile.targetMax)
+                targetCountdown = nextTargetHold(random: &random, profile: profile)
             }
 
-            let drift = (target - multiplier) * random.nextFloat(in: 0.36...0.52)
-            let pressureWobble = random.nextFloat(in: -0.035...0.035)
-            multiplier = max(0.66, min(1.42, multiplier + drift + pressureWobble))
+            let drift = (target - multiplier) * random.nextFloat(in: profile.driftMin...profile.driftMax)
+            let pressureWobble = random.nextFloat(in: -profile.wobble...profile.wobble)
+            multiplier = max(profile.clampMin, min(profile.clampMax, multiplier + drift + pressureWobble))
             targetCountdown -= 1
 
             return max(1.0, baseWidth * multiplier)
         }
     }
 
-    private static func appendVariablePolyline(to path: NSBezierPath, points: [CGPoint], baseWidth: CGFloat, random: inout SeededRandom, closed: Bool) {
+    private static func nextTargetHold(random: inout SeededRandom, profile: WidthProfile) -> Int {
+        Int(random.next() % (profile.holdMax - profile.holdMin + 1) + profile.holdMin)
+    }
+
+    private static func appendVariablePolyline(to path: NSBezierPath, points: [CGPoint], baseWidth: CGFloat, random: inout SeededRandom, closed: Bool, profile: WidthProfile) {
         guard points.count >= 2 else {
             if let point = points.first {
-                let width = variableWidths(count: 1, baseWidth: baseWidth, random: &random)[0]
+                let width = variableWidths(count: 1, baseWidth: baseWidth, random: &random, profile: profile)[0]
                 path.appendOval(in: CGRect(x: point.x - width / 2, y: point.y - width / 2, width: width, height: width))
             }
             return
         }
 
-        var widths = variableWidths(count: points.count, baseWidth: baseWidth, random: &random)
-        if closed {
-            widths.append(widths.first ?? baseWidth)
+        let widths = variableWidths(count: points.count, baseWidth: baseWidth, random: &random, profile: profile)
+        addContinuousVariableWidthLine(to: path, points: points, widths: widths, closed: closed)
+    }
+
+    private static func addContinuousVariableWidthLine(to path: NSBezierPath, points: [CGPoint], widths: [CGFloat], closed: Bool) {
+        guard points.count >= 2, widths.count == points.count else { return }
+
+        var leftPoints: [CGPoint] = []
+        var rightPoints: [CGPoint] = []
+        var tangents: [CGPoint] = []
+
+        for index in 0..<points.count {
+            let tangent: CGPoint
+            if closed {
+                let previous = points[(index - 1 + points.count) % points.count]
+                let next = points[(index + 1) % points.count]
+                tangent = normalized(CGPoint(x: next.x - previous.x, y: next.y - previous.y))
+            } else if index == 0 {
+                tangent = normalized(CGPoint(x: points[1].x - points[0].x, y: points[1].y - points[0].y))
+            } else if index == points.count - 1 {
+                tangent = normalized(CGPoint(x: points[index].x - points[index - 1].x, y: points[index].y - points[index - 1].y))
+            } else {
+                tangent = normalized(CGPoint(x: points[index + 1].x - points[index - 1].x, y: points[index + 1].y - points[index - 1].y))
+            }
+
+            let fallbackTangent = tangent == .zero ? CGPoint(x: 1, y: 0) : tangent
+            tangents.append(fallbackTangent)
+
+            let normal = CGPoint(x: -fallbackTangent.y, y: fallbackTangent.x)
+            let halfWidth = widths[index] / 2
+            let point = points[index]
+            leftPoints.append(CGPoint(x: point.x + normal.x * halfWidth, y: point.y + normal.y * halfWidth))
+            rightPoints.append(CGPoint(x: point.x - normal.x * halfWidth, y: point.y - normal.y * halfWidth))
         }
 
-        let segmentCount = closed ? points.count : points.count - 1
-        for index in 0..<segmentCount {
-            let start = points[index]
-            let end = points[(index + 1) % points.count]
-            let startWidth = widths[index]
-            let endWidth = widths[index + 1]
-            let midWidth = max(1.0, ((startWidth + endWidth) / 2) * random.nextFloat(in: 0.90...1.12))
-            addVariableWidthLine(
-                to: path,
-                from: start,
-                to: end,
-                control: nil,
-                wStart: startWidth,
-                wMid: midWidth,
-                wEnd: endWidth,
-                roundCapStart: true,
-                roundCapEnd: true
-            )
+        if closed {
+            path.move(to: leftPoints[0])
+            for index in 1..<leftPoints.count {
+                path.line(to: leftPoints[index])
+            }
+            path.line(to: leftPoints[0])
+            path.line(to: rightPoints[0])
+            for index in (1..<rightPoints.count).reversed() {
+                path.line(to: rightPoints[index])
+            }
+            path.line(to: rightPoints[0])
+            path.close()
+            return
         }
+
+        path.move(to: rightPoints[0])
+
+        let startRadius = widths[0] / 2
+        let startTangent = tangents[0]
+        path.curve(
+            to: leftPoints[0],
+            controlPoint1: CGPoint(x: rightPoints[0].x - startTangent.x * startRadius * 1.3, y: rightPoints[0].y - startTangent.y * startRadius * 1.3),
+            controlPoint2: CGPoint(x: leftPoints[0].x - startTangent.x * startRadius * 1.3, y: leftPoints[0].y - startTangent.y * startRadius * 1.3)
+        )
+
+        for index in 1..<leftPoints.count {
+            path.line(to: leftPoints[index])
+        }
+
+        let endRadius = widths[widths.count - 1] / 2
+        let endTangent = tangents[tangents.count - 1]
+        path.curve(
+            to: rightPoints[rightPoints.count - 1],
+            controlPoint1: CGPoint(x: leftPoints[leftPoints.count - 1].x + endTangent.x * endRadius * 1.3, y: leftPoints[leftPoints.count - 1].y + endTangent.y * endRadius * 1.3),
+            controlPoint2: CGPoint(x: rightPoints[rightPoints.count - 1].x + endTangent.x * endRadius * 1.3, y: rightPoints[rightPoints.count - 1].y + endTangent.y * endRadius * 1.3)
+        )
+
+        for index in (0..<(rightPoints.count - 1)).reversed() {
+            path.line(to: rightPoints[index])
+        }
+
+        path.close()
+    }
+
+    private static func normalized(_ point: CGPoint) -> CGPoint {
+        let length = hypot(point.x, point.y)
+        guard length > 0.001 else { return .zero }
+        return CGPoint(x: point.x / length, y: point.y / length)
     }
 
     private static func appendVariableArrow(to path: NSBezierPath, annotation: Annotation, random: inout SeededRandom) {
         guard let start = annotation.arrowStart, let end = annotation.arrowEnd else { return }
         let strokeWidth = annotation.dynamicArrowStrokeWidth
         guard let arrow = arrowGeometry(start: start, end: end, control: annotation.arrowControlPoint, strokeWidth: strokeWidth, seed: random.state) else { return }
-        appendVariablePolyline(to: path, points: sampleQuadratic(from: start, control: arrow.control, to: arrow.shaftEnd, steps: 18), baseWidth: strokeWidth, random: &random, closed: false)
+        appendVariablePolyline(to: path, points: sampleQuadratic(from: start, control: arrow.control, to: arrow.shaftEnd, steps: 22), baseWidth: strokeWidth, random: &random, closed: false, profile: .stroke)
     }
 
     private struct ArrowGeometry {
@@ -325,7 +444,7 @@ class RoughPathGenerator {
         let angle = atan2(dyCtrl, dxCtrl)
         let direction = CGPoint(x: cos(angle), y: sin(angle))
         let normal = CGPoint(x: -sin(angle), y: cos(angle))
-        let gap = max(2.0, strokeWidth * 0.72)
+        let gap = max(1.0, strokeWidth * 0.34)
         let shaftEnd = CGPoint(x: end.x - (headLength + gap) * direction.x, y: end.y - (headLength + gap) * direction.y)
         let p1 = CGPoint(x: end.x - headLength * cos(angle) - headWidth / 2 * sin(angle),
                          y: end.y - headLength * sin(angle) + headWidth / 2 * cos(angle))
@@ -346,7 +465,7 @@ class RoughPathGenerator {
     }
 
     private static func ovalOutlinePoints(for rect: CGRect) -> [CGPoint] {
-        let steps = 48
+        let steps = 72
         let center = CGPoint(x: rect.midX, y: rect.midY)
         let radiusX = rect.width / 2
         let radiusY = rect.height / 2

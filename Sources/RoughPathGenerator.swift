@@ -193,40 +193,46 @@ class RoughPathGenerator {
             return path
         }
 
-        let strokeWidth = annotation.dynamicArrowStrokeWidth
-        let baseMid = CGPoint(
-            x: (arrow.headPoint1.x + arrow.headPoint2.x) / 2,
-            y: (arrow.headPoint1.y + arrow.headPoint2.y) / 2
+        let headLength = arrow.headLength
+        let headWidth = arrow.headWidth
+        let leftBase = CGPoint(
+            x: end.x - arrow.direction.x * headLength * 0.86 - arrow.normal.x * headWidth * 0.50,
+            y: end.y - arrow.direction.y * headLength * 0.86 - arrow.normal.y * headWidth * 0.50
         )
-        let headLength = distance(from: baseMid, to: end)
-        let baseBow = max(1.0, strokeWidth * 0.20)
-        let shoulderBow = max(1.5, strokeWidth * 0.34)
+        let rightBase = CGPoint(
+            x: end.x - arrow.direction.x * headLength * 0.86 + arrow.normal.x * headWidth * 0.50,
+            y: end.y - arrow.direction.y * headLength * 0.86 + arrow.normal.y * headWidth * 0.50
+        )
+        let baseMid = CGPoint(
+            x: (leftBase.x + rightBase.x) / 2,
+            y: (leftBase.y + rightBase.y) / 2
+        )
 
         let leftControl1 = CGPoint(
-            x: arrow.headPoint1.x + arrow.direction.x * headLength * 0.42 - arrow.normal.x * shoulderBow,
-            y: arrow.headPoint1.y + arrow.direction.y * headLength * 0.42 - arrow.normal.y * shoulderBow
+            x: leftBase.x + arrow.direction.x * headLength * 0.26 - arrow.normal.x * headWidth * 0.16,
+            y: leftBase.y + arrow.direction.y * headLength * 0.26 - arrow.normal.y * headWidth * 0.16
         )
         let leftControl2 = CGPoint(
-            x: end.x - arrow.direction.x * headLength * 0.25 - arrow.normal.x * strokeWidth * 0.16,
-            y: end.y - arrow.direction.y * headLength * 0.25 - arrow.normal.y * strokeWidth * 0.16
+            x: end.x - arrow.direction.x * headLength * 0.36 - arrow.normal.x * headWidth * 0.11,
+            y: end.y - arrow.direction.y * headLength * 0.36 - arrow.normal.y * headWidth * 0.11
         )
         let rightControl1 = CGPoint(
-            x: end.x - arrow.direction.x * headLength * 0.25 + arrow.normal.x * strokeWidth * 0.16,
-            y: end.y - arrow.direction.y * headLength * 0.25 + arrow.normal.y * strokeWidth * 0.16
+            x: end.x - arrow.direction.x * headLength * 0.36 + arrow.normal.x * headWidth * 0.11,
+            y: end.y - arrow.direction.y * headLength * 0.36 + arrow.normal.y * headWidth * 0.11
         )
         let rightControl2 = CGPoint(
-            x: arrow.headPoint2.x + arrow.direction.x * headLength * 0.42 + arrow.normal.x * shoulderBow,
-            y: arrow.headPoint2.y + arrow.direction.y * headLength * 0.42 + arrow.normal.y * shoulderBow
+            x: rightBase.x + arrow.direction.x * headLength * 0.26 + arrow.normal.x * headWidth * 0.16,
+            y: rightBase.y + arrow.direction.y * headLength * 0.26 + arrow.normal.y * headWidth * 0.16
         )
         let baseControl = CGPoint(
-            x: baseMid.x + arrow.direction.x * baseBow,
-            y: baseMid.y + arrow.direction.y * baseBow
+            x: baseMid.x + arrow.direction.x * headLength * 0.15,
+            y: baseMid.y + arrow.direction.y * headLength * 0.15
         )
 
-        path.move(to: arrow.headPoint1)
+        path.move(to: leftBase)
         path.curve(to: end, controlPoint1: leftControl1, controlPoint2: leftControl2)
-        path.curve(to: arrow.headPoint2, controlPoint1: rightControl1, controlPoint2: rightControl2)
-        path.curve(to: arrow.headPoint1, controlPoint1: baseControl, controlPoint2: baseControl)
+        path.curve(to: rightBase, controlPoint1: rightControl1, controlPoint2: rightControl2)
+        path.curve(to: leftBase, controlPoint1: baseControl, controlPoint2: baseControl)
         path.close()
         return path
     }
@@ -406,10 +412,6 @@ class RoughPathGenerator {
         }
     }
 
-    private static func distance(from start: CGPoint, to end: CGPoint) -> CGFloat {
-        hypot(end.x - start.x, end.y - start.y)
-    }
-
     private static func normalized(_ point: CGPoint) -> CGPoint {
         let length = hypot(point.x, point.y)
         guard length > 0.001 else { return .zero }
@@ -430,6 +432,8 @@ class RoughPathGenerator {
         let headPoint2: CGPoint
         let direction: CGPoint
         let normal: CGPoint
+        let headLength: CGFloat
+        let headWidth: CGFloat
     }
 
     private static func arrowGeometry(start: CGPoint, end: CGPoint, control: CGPoint?, strokeWidth: CGFloat, seed: UInt32) -> ArrowGeometry? {
@@ -460,14 +464,13 @@ class RoughPathGenerator {
         let angle = atan2(dyCtrl, dxCtrl)
         let direction = CGPoint(x: cos(angle), y: sin(angle))
         let normal = CGPoint(x: -sin(angle), y: cos(angle))
-        let gap = max(1.0, strokeWidth * 0.34)
-        let shaftEnd = CGPoint(x: end.x - (headLength + gap) * direction.x, y: end.y - (headLength + gap) * direction.y)
+        let shaftEnd = CGPoint(x: end.x - headLength * 0.80 * direction.x, y: end.y - headLength * 0.80 * direction.y)
         let p1 = CGPoint(x: end.x - headLength * cos(angle) - headWidth / 2 * sin(angle),
                          y: end.y - headLength * sin(angle) + headWidth / 2 * cos(angle))
         let p2 = CGPoint(x: end.x - headLength * cos(angle) + headWidth / 2 * sin(angle),
                          y: end.y - headLength * sin(angle) - headWidth / 2 * cos(angle))
 
-        return ArrowGeometry(control: finalControl, shaftEnd: shaftEnd, headPoint1: p1, headPoint2: p2, direction: direction, normal: normal)
+        return ArrowGeometry(control: finalControl, shaftEnd: shaftEnd, headPoint1: p1, headPoint2: p2, direction: direction, normal: normal, headLength: headLength, headWidth: headWidth)
     }
 
     private static func rectangleOutlinePoints(for rect: CGRect) -> [CGPoint] {
@@ -499,23 +502,6 @@ class RoughPathGenerator {
             return CGPoint(
                 x: oneMinusT * oneMinusT * start.x + 2 * oneMinusT * t * control.x + t * t * end.x,
                 y: oneMinusT * oneMinusT * start.y + 2 * oneMinusT * t * control.y + t * t * end.y
-            )
-        }
-    }
-
-    private static func sampleCubic(from start: CGPoint, control1: CGPoint, control2: CGPoint, to end: CGPoint, steps: Int) -> [CGPoint] {
-        (0...steps).map { index in
-            let t = CGFloat(index) / CGFloat(steps)
-            let oneMinusT = 1.0 - t
-            return CGPoint(
-                x: oneMinusT * oneMinusT * oneMinusT * start.x
-                    + 3 * oneMinusT * oneMinusT * t * control1.x
-                    + 3 * oneMinusT * t * t * control2.x
-                    + t * t * t * end.x,
-                y: oneMinusT * oneMinusT * oneMinusT * start.y
-                    + 3 * oneMinusT * oneMinusT * t * control1.y
-                    + 3 * oneMinusT * t * t * control2.y
-                    + t * t * t * end.y
             )
         }
     }

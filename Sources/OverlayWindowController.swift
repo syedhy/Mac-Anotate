@@ -427,25 +427,36 @@ struct ClearPromptView: View {
 struct ShortcutHelpView: View {
     let onDismiss: () -> Void
 
-    private let shortcuts: [(String, String)] = [
-        ("P", "Pen"),
-        ("A", "Arrow"),
-        ("R", "Rectangle"),
-        ("O", "Oval"),
-        ("T", "Text"),
-        ("L", "Laser tools"),
-        ("V", "Select"),
-        ("C", "Clear"),
-        ("Cmd+Z", "Undo"),
-        ("Cmd+Shift+Z", "Redo"),
-        ("Toolbar", "Export PNG")
+    private let shortcutSections: [(String, [(String, String)])] = [
+        ("Tools", [
+            ("P", "Pen"),
+            ("A", "Arrow"),
+            ("R", "Rectangle"),
+            ("O", "Oval"),
+            ("T", "Text"),
+            ("V", "Select"),
+            ("L", "Laser tools")
+        ]),
+        ("Actions", [
+            ("Cmd+Z", "Undo"),
+            ("Cmd+Shift+Z", "Redo"),
+            ("C", "Clear"),
+            ("H", "Hide toolbar"),
+            ("Esc", "Close overlay")
+        ])
     ]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 18) {
             HStack {
-                Text("Shortcuts")
-                    .font(.headline)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Quick shortcuts")
+                        .font(.system(size: 18, weight: .semibold))
+                    Text("Shown once. Open it again from the ? button.")
+                        .font(.system(size: 12))
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+                }
                 Spacer()
                 Button(action: onDismiss) {
                     Image(systemName: "xmark.circle.fill")
@@ -455,26 +466,54 @@ struct ShortcutHelpView: View {
                 .foregroundColor(.secondary)
             }
 
-            LazyVGrid(columns: [GridItem(.fixed(96)), GridItem(.flexible())], alignment: .leading, spacing: 8) {
-                ForEach(shortcuts, id: \.0) { shortcut in
-                    Text(shortcut.0)
-                        .font(.system(size: 12, weight: .semibold, design: .monospaced))
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 3)
-                        .background(Capsule().fill(Color.secondary.opacity(0.16)))
+            HStack(alignment: .top, spacing: 18) {
+                ForEach(shortcutSections, id: \.0) { section in
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(section.0)
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(.secondary)
+                            .textCase(.uppercase)
 
-                    Text(shortcut.1)
-                        .font(.system(size: 12))
-                        .foregroundColor(.secondary)
+                        ForEach(section.1, id: \.0) { shortcut in
+                            HStack(spacing: 8) {
+                                Text(shortcut.0)
+                                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.8)
+                                    .frame(width: 92, alignment: .center)
+                                    .padding(.vertical, 4)
+                                    .background(Capsule().fill(Color.secondary.opacity(0.16)))
+
+                                Text(shortcut.1)
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundColor(.primary)
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.85)
+
+                                Spacer(minLength: 0)
+                            }
+                        }
+                    }
+                    .frame(width: 190, alignment: .leading)
                 }
             }
+
+            HStack {
+                Label("Export PNG from the toolbar", systemImage: "square.and.arrow.up")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(.secondary)
+                Spacer()
+                Button("Got it", action: onDismiss)
+                    .buttonStyle(.borderedProminent)
+            }
         }
-        .padding(18)
-        .frame(width: 300)
+        .padding(20)
+        .frame(width: 440)
         .background(
             VisualEffectView(material: .popover, blendingMode: .behindWindow)
-                .clipShape(RoundedRectangle(cornerRadius: 14))
-                .shadow(color: Color.black.opacity(0.16), radius: 18, x: 0, y: 10)
+                .clipShape(RoundedRectangle(cornerRadius: 16))
+                .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.white.opacity(0.18), lineWidth: 1))
+                .shadow(color: Color.black.opacity(0.18), radius: 24, x: 0, y: 14)
         )
     }
 }

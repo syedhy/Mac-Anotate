@@ -180,18 +180,68 @@ class RoughPathGenerator {
         return path
     }
 
+    static func generateArrowHeadStrokePath(from annotation: Annotation, pass: Int) -> NSBezierPath {
+        let path = NSBezierPath()
+        guard annotation.type == .arrow,
+              let start = annotation.arrowStart,
+              let end = annotation.arrowEnd else {
+            return path
+        }
+
+        let seed = annotation.roughnessSeed &+ UInt32(pass * 7351) &+ 19_171
+        guard let arrow = arrowGeometry(start: start, end: end, control: annotation.arrowControlPoint, strokeWidth: annotation.dynamicArrowStrokeWidth, seed: seed) else {
+            return path
+        }
+
+        var random = SeededRandom(seed: seed)
+        let strokeWidth = annotation.dynamicArrowStrokeWidth
+        let baseMid = CGPoint(
+            x: (arrow.headPoint1.x + arrow.headPoint2.x) / 2,
+            y: (arrow.headPoint1.y + arrow.headPoint2.y) / 2
+        )
+        let baseBow = max(1.5, strokeWidth * 0.28)
+        let shoulderBow = max(1.0, strokeWidth * 0.18)
+
+        let leftControl = CGPoint(
+            x: (arrow.headPoint1.x + end.x) / 2 - arrow.normal.x * shoulderBow,
+            y: (arrow.headPoint1.y + end.y) / 2 - arrow.normal.y * shoulderBow
+        )
+        let rightControl = CGPoint(
+            x: (arrow.headPoint2.x + end.x) / 2 + arrow.normal.x * shoulderBow,
+            y: (arrow.headPoint2.y + end.y) / 2 + arrow.normal.y * shoulderBow
+        )
+        let baseControl = CGPoint(
+            x: baseMid.x - arrow.direction.x * baseBow,
+            y: baseMid.y - arrow.direction.y * baseBow
+        )
+
+        var headPoints: [CGPoint] = []
+        headPoints.append(contentsOf: sampleQuadratic(from: arrow.headPoint1, control: leftControl, to: end, steps: 6).dropLast())
+        headPoints.append(contentsOf: sampleQuadratic(from: end, control: rightControl, to: arrow.headPoint2, steps: 6).dropLast())
+        headPoints.append(contentsOf: sampleQuadratic(from: arrow.headPoint2, control: baseControl, to: arrow.headPoint1, steps: 7).dropLast())
+
+        appendVariablePolyline(to: path, points: headPoints, baseWidth: strokeWidth * 0.98, random: &random, closed: true)
+        return path
+    }
+
     private static func variableWidths(count: Int, baseWidth: CGFloat, random: inout SeededRandom) -> [CGFloat] {
         guard count > 0 else { return [] }
 
-        var multiplier = random.nextFloat(in: 0.82...1.24)
-        return (0..<count).map { index in
-            if index == 0 || random.nextFloat() < 0.34 {
-                multiplier = random.nextFloat(in: 0.66...1.38)
-            } else {
-                multiplier += random.nextFloat(in: -0.18...0.18)
+        var multiplier = random.nextFloat(in: 0.90...1.14)
+        var target = random.nextFloat(in: 0.82...1.24)
+        var targetCountdown = Int(random.next() % 5) + 4
+
+        return (0..<count).map { _ in
+            if targetCountdown == 0 {
+                target = random.nextFloat(in: 0.80...1.26)
+                targetCountdown = Int(random.next() % 5) + 4
             }
 
-            multiplier = max(0.6, min(1.45, multiplier))
+            let drift = (target - multiplier) * random.nextFloat(in: 0.22...0.38)
+            let pressureWobble = random.nextFloat(in: -0.045...0.045)
+            multiplier = max(0.76, min(1.30, multiplier + drift + pressureWobble))
+            targetCountdown -= 1
+
             return max(1.0, baseWidth * multiplier)
         }
     }
@@ -216,7 +266,7 @@ class RoughPathGenerator {
             let end = points[(index + 1) % points.count]
             let startWidth = widths[index]
             let endWidth = widths[index + 1]
-            let midWidth = max(1.0, baseWidth * random.nextFloat(in: 0.58...1.48))
+            let midWidth = max(1.0, ((startWidth + endWidth) / 2) * random.nextFloat(in: 0.94...1.06))
             addVariableWidthLine(
                 to: path,
                 from: start,
@@ -243,6 +293,8 @@ class RoughPathGenerator {
         let shaftEnd: CGPoint
         let headPoint1: CGPoint
         let headPoint2: CGPoint
+        let direction: CGPoint
+        let normal: CGPoint
     }
 
     private static func arrowGeometry(start: CGPoint, end: CGPoint, control: CGPoint?, strokeWidth: CGFloat, seed: UInt32) -> ArrowGeometry? {
@@ -266,18 +318,21 @@ class RoughPathGenerator {
             finalControl = CGPoint(x: baseControl.x + varX, y: baseControl.y + varY)
         }
 
-        let headLength = strokeWidth * 3.5
-        let headWidth = strokeWidth * 3.0
+        let headLength = strokeWidth * 4.1
+        let headWidth = strokeWidth * 3.35
         let dxCtrl = end.x - finalControl.x
         let dyCtrl = end.y - finalControl.y
         let angle = atan2(dyCtrl, dxCtrl)
-        let shaftEnd = CGPoint(x: end.x - headLength * 1.2 * cos(angle), y: end.y - headLength * 1.2 * sin(angle))
+        let direction = CGPoint(x: cos(angle), y: sin(angle))
+        let normal = CGPoint(x: -sin(angle), y: cos(angle))
+        let gap = max(2.0, strokeWidth * 0.72)
+        let shaftEnd = CGPoint(x: end.x - (headLength + gap) * direction.x, y: end.y - (headLength + gap) * direction.y)
         let p1 = CGPoint(x: end.x - headLength * cos(angle) - headWidth / 2 * sin(angle),
                          y: end.y - headLength * sin(angle) + headWidth / 2 * cos(angle))
         let p2 = CGPoint(x: end.x - headLength * cos(angle) + headWidth / 2 * sin(angle),
                          y: end.y - headLength * sin(angle) - headWidth / 2 * cos(angle))
 
-        return ArrowGeometry(control: finalControl, shaftEnd: shaftEnd, headPoint1: p1, headPoint2: p2)
+        return ArrowGeometry(control: finalControl, shaftEnd: shaftEnd, headPoint1: p1, headPoint2: p2, direction: direction, normal: normal)
     }
 
     private static func rectangleOutlinePoints(for rect: CGRect) -> [CGPoint] {
@@ -287,7 +342,7 @@ class RoughPathGenerator {
             CGPoint(x: rect.maxX, y: rect.maxY),
             CGPoint(x: rect.minX, y: rect.maxY)
         ]
-        return sampleClosedPolyline(corners, pointsPerEdge: 8)
+        return sampleClosedPolyline(corners, pointsPerEdge: 6)
     }
 
     private static func ovalOutlinePoints(for rect: CGRect) -> [CGPoint] {

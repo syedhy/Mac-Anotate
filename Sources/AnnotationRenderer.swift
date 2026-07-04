@@ -180,12 +180,9 @@ class AnnotationRenderer {
             path1.fill()
 
             if annotation.type == .arrow {
-                let headPath = RoughPathGenerator.generateArrowHeadPath(from: annotation, pass: 0)
-                headPath.lineWidth = annotation.dynamicArrowStrokeWidth
-                headPath.lineCapStyle = .round
-                headPath.lineJoinStyle = .round
-                color.setStroke()
-                headPath.stroke()
+                let headPath = RoughPathGenerator.generateArrowHeadStrokePath(from: annotation, pass: 0)
+                color.setFill()
+                headPath.fill()
             }
         } else if annotation.type == .rectangle || annotation.type == .oval {
             let path1 = RoughPathGenerator.generateDoodlePath(from: annotation, pass: 0)

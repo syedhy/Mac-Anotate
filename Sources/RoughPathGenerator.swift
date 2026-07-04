@@ -199,8 +199,8 @@ class RoughPathGenerator {
             x: (arrow.headPoint1.x + arrow.headPoint2.x) / 2,
             y: (arrow.headPoint1.y + arrow.headPoint2.y) / 2
         )
-        let baseBow = max(1.5, strokeWidth * 0.28)
-        let shoulderBow = max(1.0, strokeWidth * 0.18)
+        let baseBow = max(2.0, strokeWidth * 0.46)
+        let shoulderBow = max(1.5, strokeWidth * 0.30)
 
         let leftControl = CGPoint(
             x: (arrow.headPoint1.x + end.x) / 2 - arrow.normal.x * shoulderBow,
@@ -220,26 +220,26 @@ class RoughPathGenerator {
         headPoints.append(contentsOf: sampleQuadratic(from: end, control: rightControl, to: arrow.headPoint2, steps: 6).dropLast())
         headPoints.append(contentsOf: sampleQuadratic(from: arrow.headPoint2, control: baseControl, to: arrow.headPoint1, steps: 7).dropLast())
 
-        appendVariablePolyline(to: path, points: headPoints, baseWidth: strokeWidth * 0.98, random: &random, closed: true)
+        appendVariablePolyline(to: path, points: headPoints, baseWidth: strokeWidth * 1.08, random: &random, closed: true)
         return path
     }
 
     private static func variableWidths(count: Int, baseWidth: CGFloat, random: inout SeededRandom) -> [CGFloat] {
         guard count > 0 else { return [] }
 
-        var multiplier = random.nextFloat(in: 0.90...1.14)
-        var target = random.nextFloat(in: 0.82...1.24)
-        var targetCountdown = Int(random.next() % 5) + 4
+        var multiplier = random.nextFloat(in: 0.78...1.30)
+        var target = random.nextFloat(in: 0.68...1.42)
+        var targetCountdown = Int(random.next() % 4) + 4
 
         return (0..<count).map { _ in
             if targetCountdown == 0 {
-                target = random.nextFloat(in: 0.80...1.26)
-                targetCountdown = Int(random.next() % 5) + 4
+                target = random.nextFloat(in: 0.68...1.42)
+                targetCountdown = Int(random.next() % 4) + 4
             }
 
-            let drift = (target - multiplier) * random.nextFloat(in: 0.22...0.38)
-            let pressureWobble = random.nextFloat(in: -0.045...0.045)
-            multiplier = max(0.76, min(1.30, multiplier + drift + pressureWobble))
+            let drift = (target - multiplier) * random.nextFloat(in: 0.36...0.52)
+            let pressureWobble = random.nextFloat(in: -0.035...0.035)
+            multiplier = max(0.66, min(1.42, multiplier + drift + pressureWobble))
             targetCountdown -= 1
 
             return max(1.0, baseWidth * multiplier)
@@ -266,7 +266,7 @@ class RoughPathGenerator {
             let end = points[(index + 1) % points.count]
             let startWidth = widths[index]
             let endWidth = widths[index + 1]
-            let midWidth = max(1.0, ((startWidth + endWidth) / 2) * random.nextFloat(in: 0.94...1.06))
+            let midWidth = max(1.0, ((startWidth + endWidth) / 2) * random.nextFloat(in: 0.90...1.12))
             addVariableWidthLine(
                 to: path,
                 from: start,
@@ -318,8 +318,8 @@ class RoughPathGenerator {
             finalControl = CGPoint(x: baseControl.x + varX, y: baseControl.y + varY)
         }
 
-        let headLength = strokeWidth * 4.1
-        let headWidth = strokeWidth * 3.35
+        let headLength = strokeWidth * 4.85
+        let headWidth = strokeWidth * 4.05
         let dxCtrl = end.x - finalControl.x
         let dyCtrl = end.y - finalControl.y
         let angle = atan2(dyCtrl, dxCtrl)

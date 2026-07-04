@@ -193,46 +193,10 @@ class RoughPathGenerator {
             return path
         }
 
-        let headLength = arrow.headLength
-        let headWidth = arrow.headWidth
-        let leftBase = CGPoint(
-            x: end.x - arrow.direction.x * headLength * 0.86 - arrow.normal.x * headWidth * 0.50,
-            y: end.y - arrow.direction.y * headLength * 0.86 - arrow.normal.y * headWidth * 0.50
-        )
-        let rightBase = CGPoint(
-            x: end.x - arrow.direction.x * headLength * 0.86 + arrow.normal.x * headWidth * 0.50,
-            y: end.y - arrow.direction.y * headLength * 0.86 + arrow.normal.y * headWidth * 0.50
-        )
-        let baseMid = CGPoint(
-            x: (leftBase.x + rightBase.x) / 2,
-            y: (leftBase.y + rightBase.y) / 2
-        )
-
-        let leftControl1 = CGPoint(
-            x: leftBase.x + arrow.direction.x * headLength * 0.26 - arrow.normal.x * headWidth * 0.16,
-            y: leftBase.y + arrow.direction.y * headLength * 0.26 - arrow.normal.y * headWidth * 0.16
-        )
-        let leftControl2 = CGPoint(
-            x: end.x - arrow.direction.x * headLength * 0.36 - arrow.normal.x * headWidth * 0.11,
-            y: end.y - arrow.direction.y * headLength * 0.36 - arrow.normal.y * headWidth * 0.11
-        )
-        let rightControl1 = CGPoint(
-            x: end.x - arrow.direction.x * headLength * 0.36 + arrow.normal.x * headWidth * 0.11,
-            y: end.y - arrow.direction.y * headLength * 0.36 + arrow.normal.y * headWidth * 0.11
-        )
-        let rightControl2 = CGPoint(
-            x: rightBase.x + arrow.direction.x * headLength * 0.26 + arrow.normal.x * headWidth * 0.16,
-            y: rightBase.y + arrow.direction.y * headLength * 0.26 + arrow.normal.y * headWidth * 0.16
-        )
-        let baseControl = CGPoint(
-            x: baseMid.x + arrow.direction.x * headLength * 0.15,
-            y: baseMid.y + arrow.direction.y * headLength * 0.15
-        )
-
-        path.move(to: leftBase)
-        path.curve(to: end, controlPoint1: leftControl1, controlPoint2: leftControl2)
-        path.curve(to: rightBase, controlPoint1: rightControl1, controlPoint2: rightControl2)
-        path.curve(to: leftBase, controlPoint1: baseControl, controlPoint2: baseControl)
+        path.move(to: arrow.headPoint1)
+        path.line(to: end)
+        path.line(to: arrow.headPoint2)
+        path.line(to: arrow.headPoint1)
         path.close()
         return path
     }
@@ -457,14 +421,14 @@ class RoughPathGenerator {
             finalControl = CGPoint(x: baseControl.x + varX, y: baseControl.y + varY)
         }
 
-        let headLength = strokeWidth * 5.95
-        let headWidth = strokeWidth * 5.25
+        let headLength = strokeWidth * 5.35
+        let headWidth = strokeWidth * 4.85
         let dxCtrl = end.x - finalControl.x
         let dyCtrl = end.y - finalControl.y
         let angle = atan2(dyCtrl, dxCtrl)
         let direction = CGPoint(x: cos(angle), y: sin(angle))
         let normal = CGPoint(x: -sin(angle), y: cos(angle))
-        let shaftEnd = CGPoint(x: end.x - headLength * 0.80 * direction.x, y: end.y - headLength * 0.80 * direction.y)
+        let shaftEnd = CGPoint(x: end.x - headLength * 0.78 * direction.x, y: end.y - headLength * 0.78 * direction.y)
         let p1 = CGPoint(x: end.x - headLength * cos(angle) - headWidth / 2 * sin(angle),
                          y: end.y - headLength * sin(angle) + headWidth / 2 * cos(angle))
         let p2 = CGPoint(x: end.x - headLength * cos(angle) + headWidth / 2 * sin(angle),

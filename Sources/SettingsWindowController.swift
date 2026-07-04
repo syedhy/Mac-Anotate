@@ -168,6 +168,8 @@ struct SettingsView: View {
                                 ShortcutRow(key: "T", action: "Text")
                                 ShortcutRow(key: "L", action: "Laser")
                                 ShortcutRow(key: "C", action: "Clear All")
+                                ShortcutRow(key: "Cmd+Z", action: "Undo")
+                                ShortcutRow(key: "Cmd+Shift+Z", action: "Redo")
                             }
                         }
                         .padding(16)

@@ -4,7 +4,7 @@ struct CustomTooltipModifier: ViewModifier {
     let text: String
     @State private var isHovered = false
     @ObservedObject var settings = SettingsStore.shared
-    
+
     func body(content: Content) -> some View {
         content
             .onHover { hovered in
@@ -59,7 +59,7 @@ struct FloatingToolbarView: View {
     weak var overlayController: OverlayWindowController?
     @ObservedObject var toolManager: ToolManager
     @ObservedObject var settings = SettingsStore.shared
-    
+
     let colors: [NSColor] = [
         NSColor(hex: "#FF3B30") ?? .systemRed,
         NSColor(hex: "#FF9500") ?? .systemOrange,
@@ -70,15 +70,15 @@ struct FloatingToolbarView: View {
         .white,
         .black
     ]
-    
+
     @State private var dragOffset = CGSize.zero
     @State private var isDragging: Bool = false
     @State private var wasToolbarBeforeDrag: Bool = false
-    
+
     private var isVertical: Bool {
         settings.toolbarEdge == .left || settings.toolbarEdge == .right
     }
-    
+
     @ViewBuilder
     func orientationDivider() -> some View {
         if isVertical {
@@ -87,7 +87,7 @@ struct FloatingToolbarView: View {
             Divider().frame(height: 24)
         }
     }
-    
+
     var body: some View {
         Group {
             if settings.isToolbarHidden {
@@ -110,13 +110,13 @@ struct FloatingToolbarView: View {
                 // Full Toolbar
                 let layout = isVertical ? AnyLayout(VStackLayout(spacing: 12)) : AnyLayout(HStackLayout(spacing: 12))
                 let innerLayout = isVertical ? AnyLayout(VStackLayout(spacing: 8)) : AnyLayout(HStackLayout(spacing: 8))
-                
+
                 layout {
             // Drag Handle
             DragHandleView(isVertical: isVertical)
                 .padding(.horizontal, isVertical ? 0 : 4)
                 .padding(.vertical, isVertical ? 4 : 0)
-            
+
             // Tools
             ForEach(ToolType.allCases, id: \.self) { tool in
                 ToolButton(tool: tool, isActive: toolManager.activeTool == tool) {
@@ -124,9 +124,9 @@ struct FloatingToolbarView: View {
                 }
                 .customTooltip("\(tool.name) (\(tool.keyEquivalent))")
             }
-            
+
             orientationDivider()
-            
+
             // Colors
             innerLayout {
                 ForEach(colors, id: \.self) { color in
@@ -143,15 +143,15 @@ struct FloatingToolbarView: View {
                         }
                 }
             }
-            
+
             orientationDivider()
-            
+
             // Stroke Width
             innerLayout {
                 Image(systemName: "lineweight")
                     .foregroundColor(.secondary)
                     .font(.system(size: 14))
-                
+
                 TaperedStrokeSlider(value: Binding(
                     get: { settings.lastSelectedStrokeWidth },
                     set: { settings.lastSelectedStrokeWidth = $0 }
@@ -159,12 +159,12 @@ struct FloatingToolbarView: View {
                 .frame(width: isVertical ? 20 : 80, height: isVertical ? 80 : 20)
             }
             .customTooltip("Stroke Width")
-            
+
             orientationDivider()
-                
+
             // Fill Style
             Menu {
-                Button(action: { 
+                Button(action: {
                     settings.lastSelectedFillStyle = .hollow
                     overlayController?.updateSelectedFillStyle(.hollow)
                 }) {
@@ -175,7 +175,7 @@ struct FloatingToolbarView: View {
                         }
                     }
                 }
-                Button(action: { 
+                Button(action: {
                     settings.lastSelectedFillStyle = .translucent
                     overlayController?.updateSelectedFillStyle(.translucent)
                 }) {
@@ -186,7 +186,7 @@ struct FloatingToolbarView: View {
                         }
                     }
                 }
-                Button(action: { 
+                Button(action: {
                     settings.lastSelectedFillStyle = .filled
                     overlayController?.updateSelectedFillStyle(.filled)
                 }) {
@@ -202,9 +202,9 @@ struct FloatingToolbarView: View {
             }
             .frame(width: 40)
             .customTooltip("Fill Style")
-            
+
             orientationDivider()
-            
+
             // Actions
             Button(action: {
                 overlayController?.undoLast()
@@ -215,7 +215,17 @@ struct FloatingToolbarView: View {
             }
             .buttonStyle(PlainButtonStyle())
             .customTooltip("Undo (Cmd+Z)")
-            
+
+            Button(action: {
+                overlayController?.redoLast()
+            }) {
+                Image(systemName: "arrow.uturn.forward")
+                    .frame(width: 32, height: 32)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(PlainButtonStyle())
+            .customTooltip("Redo (Cmd+Shift+Z)")
+
             Button(action: {
                 overlayController?.clearCanvas()
             }) {
@@ -225,7 +235,27 @@ struct FloatingToolbarView: View {
             }
             .buttonStyle(PlainButtonStyle())
             .customTooltip("Clear (C)")
-            
+
+            Button(action: {
+                overlayController?.exportAnnotations()
+            }) {
+                Image(systemName: "square.and.arrow.up")
+                    .frame(width: 32, height: 32)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(PlainButtonStyle())
+            .customTooltip("Export PNG")
+
+            Button(action: {
+                overlayController?.showShortcutHelp()
+            }) {
+                Image(systemName: "questionmark.circle")
+                    .frame(width: 32, height: 32)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(PlainButtonStyle())
+            .customTooltip("Shortcuts")
+
             Button(action: {
                 settings.isToolbarHidden = true
             }) {
@@ -236,7 +266,7 @@ struct FloatingToolbarView: View {
             }
             .buttonStyle(PlainButtonStyle())
             .customTooltip("Hide Toolbar (H)")
-            
+
             Button(action: {
                 overlayController?.toggleOverlay()
             }) {
@@ -264,7 +294,7 @@ struct FloatingToolbarView: View {
                     if !isDragging {
                         isDragging = true
                         wasToolbarBeforeDrag = !settings.isToolbarHidden
-                        
+
                         if wasToolbarBeforeDrag {
                             settings.isToolbarHidden = true
                             overlayController?.beginToolbarDrag(convertingToPill: true)
@@ -290,7 +320,7 @@ struct FloatingToolbarView: View {
 
 struct DragHandleView: View {
     var isVertical: Bool
-    
+
     var body: some View {
         HStack(spacing: 4) {
             VStack(spacing: 4) {
@@ -315,7 +345,7 @@ struct DragHandleView: View {
 struct VisualEffectView: NSViewRepresentable {
     var material: NSVisualEffectView.Material
     var blendingMode: NSVisualEffectView.BlendingMode
-    
+
     func makeNSView(context: Context) -> NSVisualEffectView {
         let view = NSVisualEffectView()
         view.material = material
@@ -323,7 +353,7 @@ struct VisualEffectView: NSViewRepresentable {
         view.state = .active
         return view
     }
-    
+
     func updateNSView(_ nsView: NSVisualEffectView, context: Context) {
         nsView.material = material
         nsView.blendingMode = blendingMode
@@ -334,7 +364,7 @@ struct ToolButton: View {
     let tool: ToolType
     let isActive: Bool
     let action: () -> Void
-    
+
     var body: some View {
         Button(action: action) {
             Image(systemName: tool.iconName)
@@ -357,21 +387,21 @@ struct TaperedStrokeSlider: View {
     var activeColor: Color = .accentColor
     var isVertical: Bool = false
     var onEditingChanged: ((Bool) -> Void)? = nil
-    
+
     @State private var isDragging: Bool = false
-    
+
     var body: some View {
         GeometryReader { geometry in
             let w = geometry.size.width
             let h = geometry.size.height
             let minThickness: CGFloat = 2.0
-            
+
             if isVertical {
                 let maxThickness: CGFloat = w * 0.8
                 let progress = max(0, min(1, (value - range.lowerBound) / (range.upperBound - range.lowerBound)))
                 let activeHeight = h * progress
                 let activeThickness = minThickness + (maxThickness - minThickness) * progress
-                
+
                 ZStack(alignment: .top) {
                     // Background Track
                     Path { path in
@@ -383,7 +413,7 @@ struct TaperedStrokeSlider: View {
                         path.closeSubpath()
                     }
                     .fill(Color.primary.opacity(0.4))
-                    
+
                     // Active Track
                     Path { path in
                         path.move(to: CGPoint(x: w/2 - minThickness/2, y: 0))
@@ -394,7 +424,7 @@ struct TaperedStrokeSlider: View {
                         path.closeSubpath()
                     }
                     .fill(activeColor)
-                    
+
                     // Thumb
                     Circle()
                         .fill(Color.white)
@@ -436,7 +466,7 @@ struct TaperedStrokeSlider: View {
                 let progress = max(0, min(1, (value - range.lowerBound) / (range.upperBound - range.lowerBound)))
                 let activeWidth = w * progress
                 let activeThickness = minThickness + (maxThickness - minThickness) * progress
-                
+
                 ZStack(alignment: .leading) {
                     // Background Track
                     Path { path in
@@ -448,7 +478,7 @@ struct TaperedStrokeSlider: View {
                         path.closeSubpath()
                     }
                     .fill(Color.primary.opacity(0.4))
-                    
+
                     // Active Track
                     Path { path in
                         path.move(to: CGPoint(x: 0, y: h/2 - minThickness/2))
@@ -459,7 +489,7 @@ struct TaperedStrokeSlider: View {
                         path.closeSubpath()
                     }
                     .fill(activeColor)
-                    
+
                     // Thumb
                     Circle()
                         .fill(Color.white)

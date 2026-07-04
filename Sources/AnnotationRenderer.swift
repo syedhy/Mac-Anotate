@@ -2,12 +2,12 @@ import Cocoa
 
 class AnnotationRenderer {
     
-    static func draw(_ annotations: [Annotation], in context: CGContext, isDragging: Bool = false, isResizing: Bool = false, hoveredID: UUID? = nil, marqueeRect: CGRect? = nil) {
+    static func draw(_ annotations: [Annotation], in context: CGContext, isDragging: Bool = false, isResizing: Bool = false, hoveredID: UUID? = nil, marqueeRect: CGRect? = nil, showsSelection: Bool = true) {
         let now = Date()
         
         for annotation in annotations {
-            let isHovered = (annotation.id == hoveredID) || SelectionManager.shared.selectedAnnotationIDs.contains(annotation.id)
-            let isSelected = SelectionManager.shared.selectedAnnotationIDs.contains(annotation.id)
+            let isHovered = showsSelection && ((annotation.id == hoveredID) || SelectionManager.shared.selectedAnnotationIDs.contains(annotation.id))
+            let isSelected = showsSelection && SelectionManager.shared.selectedAnnotationIDs.contains(annotation.id)
             let isDraggingThis = isDragging && isSelected
             let isResizingThis = isResizing && isSelected
             
@@ -25,9 +25,9 @@ class AnnotationRenderer {
                 let alpha = max(0, min(1.0, CGFloat(timeLeft / 0.5)))
                 
                 let fadedColor = color.withAlphaComponent(alpha)
-                drawAnnotation(annotation, color: fadedColor, in: context, isDragging: isDraggingThis, isResizing: isResizingThis)
+                drawAnnotation(annotation, color: fadedColor, in: context, isDragging: isDraggingThis, isResizing: isResizingThis, showsSelection: showsSelection)
             } else {
-                drawAnnotation(annotation, color: color, in: context, isDragging: isDraggingThis, isResizing: isResizingThis)
+                drawAnnotation(annotation, color: color, in: context, isDragging: isDraggingThis, isResizing: isResizingThis, showsSelection: showsSelection)
             }
         }
         
@@ -41,7 +41,7 @@ class AnnotationRenderer {
             context.restoreGState()
         }
         
-        let shouldShowGroupBB = SelectionManager.shared.selectedAnnotationIDs.count > 1 || (SelectionManager.shared.selectedAnnotationIDs.count == 1 && SelectionManager.shared.wasMarqueeSelected)
+        let shouldShowGroupBB = showsSelection && (SelectionManager.shared.selectedAnnotationIDs.count > 1 || (SelectionManager.shared.selectedAnnotationIDs.count == 1 && SelectionManager.shared.wasMarqueeSelected))
         if !isDragging && shouldShowGroupBB {
             if let groupBB = AnnotationHitTester.getGroupBoundingBox(for: annotations, selectedIDs: SelectionManager.shared.selectedAnnotationIDs) {
                 
@@ -84,12 +84,12 @@ class AnnotationRenderer {
         }
     }
     
-    private static func drawAnnotation(_ annotation: Annotation, color: NSColor, in context: CGContext, isDragging: Bool, isResizing: Bool) {
+    private static func drawAnnotation(_ annotation: Annotation, color: NSColor, in context: CGContext, isDragging: Bool, isResizing: Bool, showsSelection: Bool) {
         NSGraphicsContext.saveGraphicsState()
         let nsContext = NSGraphicsContext(cgContext: context, flipped: false)
         NSGraphicsContext.current = nsContext
         
-        let isSelected = SelectionManager.shared.selectedAnnotationIDs.contains(annotation.id)
+        let isSelected = showsSelection && SelectionManager.shared.selectedAnnotationIDs.contains(annotation.id)
         let shouldGlow = isSelected && SelectionManager.shared.wasMarqueeSelected
         
         // Add subtle shadow or glow
@@ -175,12 +175,10 @@ class AnnotationRenderer {
             path.stroke()
             
         } else if annotation.type == .pen || annotation.type == .arrow {
-            let path1 = RoughPathGenerator.generateDoodlePath(from: annotation, pass: 0)
-            path1.lineWidth = annotation.type == .arrow ? annotation.dynamicArrowStrokeWidth : annotation.strokeWidth
-            path1.lineCapStyle = .round
-            path1.lineJoinStyle = .round
+            let path1 = RoughPathGenerator.generateVariableStrokePath(from: annotation, pass: 0)
             color.setStroke()
-            path1.stroke()
+            color.setFill()
+            path1.fill()
         } else if annotation.type == .rectangle || annotation.type == .oval {
             let path1 = RoughPathGenerator.generateDoodlePath(from: annotation, pass: 0)
             
@@ -197,11 +195,9 @@ class AnnotationRenderer {
             }
             
             if annotation.fillStyle != .filled {
-                path1.lineWidth = annotation.strokeWidth
-                path1.lineCapStyle = .round
-                path1.lineJoinStyle = .round
-                color.setStroke()
-                path1.stroke()
+                let strokePath = RoughPathGenerator.generateVariableStrokePath(from: annotation, pass: 0)
+                color.setFill()
+                strokePath.fill()
             }
             
             // Selection handles will be drawn below
@@ -231,7 +227,7 @@ class AnnotationRenderer {
             path2.stroke()
         }
         
-        if !isDragging && SelectionManager.shared.selectedAnnotationIDs.contains(annotation.id) {
+        if showsSelection && !isDragging && SelectionManager.shared.selectedAnnotationIDs.contains(annotation.id) {
             if SelectionManager.shared.selectedAnnotationIDs.count == 1 && !SelectionManager.shared.wasMarqueeSelected {
                 if let handles = AnnotationHitTester.getHandles(for: annotation) {
                 NSColor.white.setFill()

@@ -180,72 +180,32 @@ class RoughPathGenerator {
         return path
     }
 
-    private enum WidthProfile: Int {
-        case thinMiddle
-        case thickMiddle
-        case taperAndPop
-        case swellThenSettle
-        case uneven
-    }
+    private static func variableWidths(count: Int, baseWidth: CGFloat, random: inout SeededRandom) -> [CGFloat] {
+        guard count > 0 else { return [] }
 
-    private static func widthProfile(using random: inout SeededRandom) -> WidthProfile {
-        WidthProfile(rawValue: Int(random.next() % 5)) ?? .thinMiddle
-    }
-
-    private static func widthMultiplier(at progress: CGFloat, profile: WidthProfile) -> CGFloat {
-        let t = max(0, min(1, progress))
-
-        switch profile {
-        case .thinMiddle:
-            return interpolate(points: [(0.0, 1.16), (0.5, 0.66), (1.0, 1.12)], at: t)
-        case .thickMiddle:
-            return interpolate(points: [(0.0, 0.78), (0.48, 1.28), (1.0, 0.84)], at: t)
-        case .taperAndPop:
-            return interpolate(points: [(0.0, 1.12), (0.65, 0.72), (0.9, 0.76), (1.0, 1.24)], at: t)
-        case .swellThenSettle:
-            return interpolate(points: [(0.0, 0.82), (0.25, 1.2), (0.7, 0.9), (1.0, 1.08)], at: t)
-        case .uneven:
-            return interpolate(points: [(0.0, 1.06), (0.2, 0.82), (0.45, 1.22), (0.72, 0.78), (1.0, 1.12)], at: t)
-        }
-    }
-
-    private static func interpolate(points: [(CGFloat, CGFloat)], at t: CGFloat) -> CGFloat {
-        guard let first = points.first else { return 1.0 }
-        guard t > first.0 else { return first.1 }
-
-        for index in 1..<points.count {
-            let previous = points[index - 1]
-            let current = points[index]
-            if t <= current.0 {
-                let span = max(0.001, current.0 - previous.0)
-                let localT = (t - previous.0) / span
-                let easedT = localT * localT * (3 - 2 * localT)
-                return previous.1 + (current.1 - previous.1) * easedT
+        var multiplier = random.nextFloat(in: 0.82...1.24)
+        return (0..<count).map { index in
+            if index == 0 || random.nextFloat() < 0.34 {
+                multiplier = random.nextFloat(in: 0.66...1.38)
+            } else {
+                multiplier += random.nextFloat(in: -0.18...0.18)
             }
+
+            multiplier = max(0.6, min(1.45, multiplier))
+            return max(1.0, baseWidth * multiplier)
         }
-
-        return points.last?.1 ?? 1.0
-    }
-
-    private static func variableWidth(baseWidth: CGFloat, progress: CGFloat, profile: WidthProfile, random: inout SeededRandom) -> CGFloat {
-        let jitter = random.nextFloat(in: -0.04...0.04)
-        return max(1.0, baseWidth * (widthMultiplier(at: progress, profile: profile) + jitter))
     }
 
     private static func appendVariablePolyline(to path: NSBezierPath, points: [CGPoint], baseWidth: CGFloat, random: inout SeededRandom, closed: Bool) {
         guard points.count >= 2 else {
             if let point = points.first {
-                let width = variableWidth(baseWidth: baseWidth, progress: 0, profile: .thinMiddle, random: &random)
+                let width = variableWidths(count: 1, baseWidth: baseWidth, random: &random)[0]
                 path.appendOval(in: CGRect(x: point.x - width / 2, y: point.y - width / 2, width: width, height: width))
             }
             return
         }
 
-        let profile = widthProfile(using: &random)
-        let progressValues = progressValues(for: points, closed: closed)
-        var widths = progressValues.map { progress in
-            variableWidth(baseWidth: baseWidth, progress: progress, profile: profile, random: &random)
-        }
+        var widths = variableWidths(count: points.count, baseWidth: baseWidth, random: &random)
         if closed {
             widths.append(widths.first ?? baseWidth)
         }
@@ -256,8 +216,7 @@ class RoughPathGenerator {
             let end = points[(index + 1) % points.count]
             let startWidth = widths[index]
             let endWidth = widths[index + 1]
-            let midProgress = (progressValues[index] + (index + 1 < progressValues.count ? progressValues[index + 1] : 1.0)) / 2
-            let midWidth = variableWidth(baseWidth: baseWidth, progress: midProgress, profile: profile, random: &random)
+            let midWidth = max(1.0, baseWidth * random.nextFloat(in: 0.58...1.48))
             addVariableWidthLine(
                 to: path,
                 from: start,
@@ -272,42 +231,11 @@ class RoughPathGenerator {
         }
     }
 
-    private static func progressValues(for points: [CGPoint], closed: Bool) -> [CGFloat] {
-        guard points.count > 1 else { return points.map { _ in 0 } }
-
-        var distances: [CGFloat] = [0]
-        var total: CGFloat = 0
-
-        for index in 1..<points.count {
-            total += points[index - 1].distance(to: points[index])
-            distances.append(total)
-        }
-
-        if closed {
-            total += points.last!.distance(to: points[0])
-        }
-
-        guard total > 0 else { return points.map { _ in 0 } }
-        return distances.map { $0 / total }
-    }
-
     private static func appendVariableArrow(to path: NSBezierPath, annotation: Annotation, random: inout SeededRandom) {
         guard let start = annotation.arrowStart, let end = annotation.arrowEnd else { return }
         let strokeWidth = annotation.dynamicArrowStrokeWidth
         guard let arrow = arrowGeometry(start: start, end: end, control: annotation.arrowControlPoint, strokeWidth: strokeWidth, seed: random.state) else { return }
-        let profile = widthProfile(using: &random)
-
-        addVariableWidthLine(
-            to: path,
-            from: start,
-            to: arrow.shaftEnd,
-            control: arrow.control,
-            wStart: variableWidth(baseWidth: strokeWidth, progress: 0, profile: profile, random: &random),
-            wMid: variableWidth(baseWidth: strokeWidth, progress: 0.5, profile: profile, random: &random),
-            wEnd: variableWidth(baseWidth: strokeWidth, progress: 1, profile: profile, random: &random),
-            roundCapStart: true,
-            roundCapEnd: true
-        )
+        appendVariablePolyline(to: path, points: sampleQuadratic(from: start, control: arrow.control, to: arrow.shaftEnd, steps: 18), baseWidth: strokeWidth, random: &random, closed: false)
     }
 
     private struct ArrowGeometry {
@@ -353,16 +281,13 @@ class RoughPathGenerator {
     }
 
     private static func rectangleOutlinePoints(for rect: CGRect) -> [CGPoint] {
-        [
+        let corners = [
             CGPoint(x: rect.minX, y: rect.minY),
-            CGPoint(x: rect.midX, y: rect.minY),
             CGPoint(x: rect.maxX, y: rect.minY),
-            CGPoint(x: rect.maxX, y: rect.midY),
             CGPoint(x: rect.maxX, y: rect.maxY),
-            CGPoint(x: rect.midX, y: rect.maxY),
-            CGPoint(x: rect.minX, y: rect.maxY),
-            CGPoint(x: rect.minX, y: rect.midY)
+            CGPoint(x: rect.minX, y: rect.maxY)
         ]
+        return sampleClosedPolyline(corners, pointsPerEdge: 8)
     }
 
     private static func ovalOutlinePoints(for rect: CGRect) -> [CGPoint] {
@@ -375,6 +300,35 @@ class RoughPathGenerator {
             let angle = CGFloat(index) / CGFloat(steps) * .pi * 2
             return CGPoint(x: center.x + cos(angle) * radiusX, y: center.y + sin(angle) * radiusY)
         }
+    }
+
+    private static func sampleQuadratic(from start: CGPoint, control: CGPoint, to end: CGPoint, steps: Int) -> [CGPoint] {
+        (0...steps).map { index in
+            let t = CGFloat(index) / CGFloat(steps)
+            let oneMinusT = 1.0 - t
+            return CGPoint(
+                x: oneMinusT * oneMinusT * start.x + 2 * oneMinusT * t * control.x + t * t * end.x,
+                y: oneMinusT * oneMinusT * start.y + 2 * oneMinusT * t * control.y + t * t * end.y
+            )
+        }
+    }
+
+    private static func sampleClosedPolyline(_ points: [CGPoint], pointsPerEdge: Int) -> [CGPoint] {
+        guard points.count > 1 else { return points }
+
+        var sampled: [CGPoint] = []
+        for index in 0..<points.count {
+            let start = points[index]
+            let end = points[(index + 1) % points.count]
+            for step in 0..<pointsPerEdge {
+                let t = CGFloat(step) / CGFloat(pointsPerEdge)
+                sampled.append(CGPoint(
+                    x: start.x + (end.x - start.x) * t,
+                    y: start.y + (end.y - start.y) * t
+                ))
+            }
+        }
+        return sampled
     }
 
     private static func addVariableWidthLine(to path: NSBezierPath, from start: CGPoint, to end: CGPoint, control: CGPoint?, wStart: CGFloat, wMid: CGFloat, wEnd: CGFloat, roundCapStart: Bool, roundCapEnd: Bool) {

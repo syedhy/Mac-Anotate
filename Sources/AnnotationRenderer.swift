@@ -186,8 +186,11 @@ class AnnotationRenderer {
             arrowPath.fill()
 
             let headPath = RoughPathGenerator.generateArrowHeadStrokePath(from: annotation, pass: 0)
-            color.setFill()
-            headPath.fill()
+            headPath.lineWidth = annotation.dynamicArrowStrokeWidth * 1.22
+            headPath.lineCapStyle = .round
+            headPath.lineJoinStyle = .round
+            color.setStroke()
+            headPath.stroke()
 
             context.endTransparencyLayer()
         } else if annotation.type == .rectangle || annotation.type == .oval {

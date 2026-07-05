@@ -223,7 +223,8 @@ struct AnnotationHitTester {
         var boundingBox = shaftPath.bounds
 
         let headPath = RoughPathGenerator.generateArrowHeadStrokePath(from: annotation, pass: 0)
-        let headBox = headPath.bounds
+        let headStrokePadding = annotation.dynamicArrowStrokeWidth * 1.22 / 2
+        let headBox = headPath.bounds.insetBy(dx: -headStrokePadding, dy: -headStrokePadding)
         boundingBox = boundingBox.isEmpty ? headBox : boundingBox.union(headBox)
 
         return boundingBox

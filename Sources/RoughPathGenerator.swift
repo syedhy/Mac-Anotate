@@ -196,80 +196,39 @@ class RoughPathGenerator {
         let headLength = arrow.headLength
         let headWidth = arrow.headWidth
         let leftBase = CGPoint(
-            x: end.x - arrow.direction.x * headLength * 0.86 - arrow.normal.x * headWidth * 0.50,
-            y: end.y - arrow.direction.y * headLength * 0.86 - arrow.normal.y * headWidth * 0.50
+            x: end.x - arrow.direction.x * headLength * 0.92 - arrow.normal.x * headWidth * 0.50,
+            y: end.y - arrow.direction.y * headLength * 0.92 - arrow.normal.y * headWidth * 0.50
         )
         let rightBase = CGPoint(
-            x: end.x - arrow.direction.x * headLength * 0.86 + arrow.normal.x * headWidth * 0.50,
-            y: end.y - arrow.direction.y * headLength * 0.86 + arrow.normal.y * headWidth * 0.50
+            x: end.x - arrow.direction.x * headLength * 0.84 + arrow.normal.x * headWidth * 0.44,
+            y: end.y - arrow.direction.y * headLength * 0.84 + arrow.normal.y * headWidth * 0.44
         )
         let baseMid = CGPoint(
             x: (leftBase.x + rightBase.x) / 2,
             y: (leftBase.y + rightBase.y) / 2
         )
         let baseControl = CGPoint(
-            x: baseMid.x + arrow.direction.x * headLength * 0.18,
-            y: baseMid.y + arrow.direction.y * headLength * 0.18
+            x: baseMid.x + arrow.direction.x * headLength * 0.14,
+            y: baseMid.y + arrow.direction.y * headLength * 0.14
         )
 
-        path.windingRule = .evenOdd
         path.move(to: leftBase)
         path.curve(
             to: end,
-            controlPoint1: CGPoint(x: leftBase.x + arrow.direction.x * headLength * 0.30 - arrow.normal.x * headWidth * 0.14,
-                                   y: leftBase.y + arrow.direction.y * headLength * 0.30 - arrow.normal.y * headWidth * 0.14),
-            controlPoint2: CGPoint(x: end.x - arrow.direction.x * headLength * 0.22 - arrow.normal.x * headWidth * 0.08,
-                                   y: end.y - arrow.direction.y * headLength * 0.22 - arrow.normal.y * headWidth * 0.08)
+            controlPoint1: CGPoint(x: leftBase.x + arrow.direction.x * headLength * 0.24 - arrow.normal.x * headWidth * 0.12,
+                                   y: leftBase.y + arrow.direction.y * headLength * 0.24 - arrow.normal.y * headWidth * 0.12),
+            controlPoint2: CGPoint(x: end.x - arrow.direction.x * headLength * 0.18 - arrow.normal.x * headWidth * 0.05,
+                                   y: end.y - arrow.direction.y * headLength * 0.18 - arrow.normal.y * headWidth * 0.05)
         )
         path.curve(
             to: rightBase,
-            controlPoint1: CGPoint(x: end.x - arrow.direction.x * headLength * 0.22 + arrow.normal.x * headWidth * 0.08,
-                                   y: end.y - arrow.direction.y * headLength * 0.22 + arrow.normal.y * headWidth * 0.08),
-            controlPoint2: CGPoint(x: rightBase.x + arrow.direction.x * headLength * 0.30 + arrow.normal.x * headWidth * 0.14,
-                                   y: rightBase.y + arrow.direction.y * headLength * 0.30 + arrow.normal.y * headWidth * 0.14)
+            controlPoint1: CGPoint(x: end.x - arrow.direction.x * headLength * 0.18 + arrow.normal.x * headWidth * 0.05,
+                                   y: end.y - arrow.direction.y * headLength * 0.18 + arrow.normal.y * headWidth * 0.05),
+            controlPoint2: CGPoint(x: rightBase.x + arrow.direction.x * headLength * 0.24 + arrow.normal.x * headWidth * 0.08,
+                                   y: rightBase.y + arrow.direction.y * headLength * 0.24 + arrow.normal.y * headWidth * 0.08)
         )
         path.curve(to: leftBase, controlPoint1: baseControl, controlPoint2: baseControl)
         path.close()
-
-        let innerTip = CGPoint(
-            x: end.x - arrow.direction.x * headLength * 0.28,
-            y: end.y - arrow.direction.y * headLength * 0.28
-        )
-        let innerLeft = CGPoint(
-            x: end.x - arrow.direction.x * headLength * 0.66 - arrow.normal.x * headWidth * 0.25,
-            y: end.y - arrow.direction.y * headLength * 0.66 - arrow.normal.y * headWidth * 0.25
-        )
-        let innerRight = CGPoint(
-            x: end.x - arrow.direction.x * headLength * 0.66 + arrow.normal.x * headWidth * 0.25,
-            y: end.y - arrow.direction.y * headLength * 0.66 + arrow.normal.y * headWidth * 0.25
-        )
-        let innerBaseMid = CGPoint(
-            x: (innerLeft.x + innerRight.x) / 2,
-            y: (innerLeft.y + innerRight.y) / 2
-        )
-        let innerBaseControl = CGPoint(
-            x: innerBaseMid.x + arrow.direction.x * headLength * 0.08,
-            y: innerBaseMid.y + arrow.direction.y * headLength * 0.08
-        )
-
-        path.move(to: innerLeft)
-        path.curve(
-            to: innerTip,
-            controlPoint1: CGPoint(x: innerLeft.x + arrow.direction.x * headLength * 0.20,
-                                   y: innerLeft.y + arrow.direction.y * headLength * 0.20),
-            controlPoint2: CGPoint(x: innerTip.x - arrow.direction.x * headLength * 0.18,
-                                   y: innerTip.y - arrow.direction.y * headLength * 0.18)
-        )
-        path.curve(
-            to: innerRight,
-            controlPoint1: CGPoint(x: innerTip.x - arrow.direction.x * headLength * 0.18,
-                                   y: innerTip.y - arrow.direction.y * headLength * 0.18),
-            controlPoint2: CGPoint(x: innerRight.x + arrow.direction.x * headLength * 0.20,
-                                   y: innerRight.y + arrow.direction.y * headLength * 0.20)
-        )
-        path.curve(to: innerLeft, controlPoint1: innerBaseControl, controlPoint2: innerBaseControl)
-        path.close()
-
         return path
     }
 
@@ -493,14 +452,14 @@ class RoughPathGenerator {
             finalControl = CGPoint(x: baseControl.x + varX, y: baseControl.y + varY)
         }
 
-        let headLength = strokeWidth * 5.55
-        let headWidth = strokeWidth * 5.05
+        let headLength = strokeWidth * 5.35
+        let headWidth = strokeWidth * 4.85
         let dxCtrl = end.x - finalControl.x
         let dyCtrl = end.y - finalControl.y
         let angle = atan2(dyCtrl, dxCtrl)
         let direction = CGPoint(x: cos(angle), y: sin(angle))
         let normal = CGPoint(x: -sin(angle), y: cos(angle))
-        let shaftEnd = CGPoint(x: end.x - headLength * 0.88 * direction.x, y: end.y - headLength * 0.88 * direction.y)
+        let shaftEnd = CGPoint(x: end.x - headLength * 0.96 * direction.x, y: end.y - headLength * 0.96 * direction.y)
         let p1 = CGPoint(x: end.x - headLength * cos(angle) - headWidth / 2 * sin(angle),
                          y: end.y - headLength * sin(angle) + headWidth / 2 * cos(angle))
         let p2 = CGPoint(x: end.x - headLength * cos(angle) + headWidth / 2 * sin(angle),

@@ -1,4 +1,5 @@
 import Cocoa
+import Carbon
 import SwiftUI
 
 enum ToolbarEdge: String, Codable {
@@ -116,6 +117,68 @@ class SettingsStore: ObservableObject {
         } else {
             self.globalShortcutModifiers = UInt32(defaults.integer(forKey: globalShortcutModifiersKey))
         }
+    }
+
+    var globalShortcutKeyEquivalent: String {
+        Self.keyString(for: globalShortcutKeyCode)?.lowercased() ?? ""
+    }
+
+    var globalShortcutModifierFlags: NSEvent.ModifierFlags {
+        Self.modifierFlags(fromCarbonModifiers: globalShortcutModifiers)
+    }
+
+    static func shortcutString(keyCode: UInt32, modifiers: UInt32) -> String {
+        var result = ""
+        let mods = Int(modifiers)
+        if (mods & controlKey) != 0 { result += "⌃ " }
+        if (mods & optionKey) != 0 { result += "⌥ " }
+        if (mods & shiftKey) != 0 { result += "⇧ " }
+        if (mods & cmdKey) != 0 { result += "⌘ " }
+
+        if let char = keyString(for: keyCode) {
+            result += char.uppercased()
+        }
+        return result.isEmpty ? "Click to record" : result
+    }
+
+    private static func modifierFlags(fromCarbonModifiers modifiers: UInt32) -> NSEvent.ModifierFlags {
+        var flags: NSEvent.ModifierFlags = []
+        let mods = Int(modifiers)
+        if (mods & controlKey) != 0 { flags.insert(.control) }
+        if (mods & optionKey) != 0 { flags.insert(.option) }
+        if (mods & shiftKey) != 0 { flags.insert(.shift) }
+        if (mods & cmdKey) != 0 { flags.insert(.command) }
+        return flags
+    }
+
+    static func keyString(for keyCode: UInt32) -> String? {
+        let source = TISCopyCurrentASCIICapableKeyboardLayoutInputSource().takeRetainedValue()
+        let layoutData = TISGetInputSourceProperty(source, kTISPropertyUnicodeKeyLayoutData)
+
+        guard let data = layoutData else { return nil }
+
+        let keyboardLayout = unsafeBitCast(data, to: CFData.self)
+        var keysDown: UInt32 = 0
+        var chars: [UniChar] = [0, 0, 0, 0]
+        var length = 0
+
+        UCKeyTranslate(
+            unsafeBitCast(CFDataGetBytePtr(keyboardLayout), to: UnsafePointer<UCKeyboardLayout>.self),
+            UInt16(keyCode),
+            UInt16(kUCKeyActionDown),
+            0,
+            UInt32(LMGetKbdType()),
+            OptionBits(kUCKeyTranslateNoDeadKeysBit),
+            &keysDown,
+            4,
+            &length,
+            &chars
+        )
+
+        if length > 0 {
+            return String(utf16CodeUnits: chars, count: length)
+        }
+        return nil
     }
 }
 

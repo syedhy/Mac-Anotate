@@ -1,12 +1,20 @@
 import Cocoa
+import Combine
 
 class MenuBarController {
     var statusItem: NSStatusItem!
     weak var overlayController: OverlayWindowController?
+    private var activateMenuItem: NSMenuItem?
+    private var shortcutObserver: AnyCancellable?
     
     init(overlayController: OverlayWindowController?) {
         self.overlayController = overlayController
         setupMenu()
+        shortcutObserver = SettingsStore.shared.$globalShortcutKeyCode
+            .combineLatest(SettingsStore.shared.$globalShortcutModifiers)
+            .sink { [weak self] _, _ in
+                self?.updateActivationShortcut()
+            }
     }
     
     private func setupMenu() {
@@ -23,7 +31,9 @@ class MenuBarController {
         
         let menu = NSMenu()
         
-        menu.addItem(NSMenuItem(title: "Activate Annotate Mode", action: #selector(toggleAnnotation), keyEquivalent: "L"))
+        let activateItem = NSMenuItem(title: "Activate Annotate Mode", action: #selector(toggleAnnotation), keyEquivalent: "")
+        activateMenuItem = activateItem
+        menu.addItem(activateItem)
         menu.addItem(NSMenuItem.separator())
         menu.addItem(NSMenuItem(title: "Settings...", action: #selector(openSettings), keyEquivalent: ","))
         menu.addItem(NSMenuItem.separator())
@@ -35,6 +45,13 @@ class MenuBarController {
         }
         
         statusItem.menu = menu
+        updateActivationShortcut()
+    }
+
+    private func updateActivationShortcut() {
+        guard let activateMenuItem else { return }
+        activateMenuItem.keyEquivalent = SettingsStore.shared.globalShortcutKeyEquivalent
+        activateMenuItem.keyEquivalentModifierMask = SettingsStore.shared.globalShortcutModifierFlags
     }
     
     @objc private func toggleAnnotation() {

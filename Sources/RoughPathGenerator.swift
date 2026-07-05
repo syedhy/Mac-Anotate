@@ -213,20 +213,8 @@ class RoughPathGenerator {
         )
 
         path.move(to: leftBase)
-        path.curve(
-            to: end,
-            controlPoint1: CGPoint(x: leftBase.x + arrow.direction.x * headLength * 0.30,
-                                   y: leftBase.y + arrow.direction.y * headLength * 0.30),
-            controlPoint2: CGPoint(x: end.x - arrow.direction.x * headLength * 0.24,
-                                   y: end.y - arrow.direction.y * headLength * 0.24)
-        )
-        path.curve(
-            to: rightBase,
-            controlPoint1: CGPoint(x: end.x - arrow.direction.x * headLength * 0.24,
-                                   y: end.y - arrow.direction.y * headLength * 0.24),
-            controlPoint2: CGPoint(x: rightBase.x + arrow.direction.x * headLength * 0.30,
-                                   y: rightBase.y + arrow.direction.y * headLength * 0.30)
-        )
+        path.line(to: end)
+        path.line(to: rightBase)
         path.curve(to: leftBase, controlPoint1: baseControl, controlPoint2: baseControl)
         path.close()
         return path

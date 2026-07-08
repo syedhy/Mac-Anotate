@@ -162,24 +162,6 @@ class RoughPathGenerator {
         return path
     }
 
-    static func generateArrowHeadPath(from annotation: Annotation, pass: Int) -> NSBezierPath {
-        let path = NSBezierPath()
-        guard annotation.type == .arrow,
-              let start = annotation.arrowStart,
-              let end = annotation.arrowEnd else {
-            return path
-        }
-
-        let geometry = arrowGeometry(start: start, end: end, control: annotation.arrowControlPoint, strokeWidth: annotation.dynamicArrowStrokeWidth, seed: annotation.roughnessSeed &+ UInt32(pass * 7351))
-        guard let arrow = geometry else { return path }
-
-        path.move(to: end)
-        path.line(to: arrow.headPoint1)
-        path.line(to: arrow.headPoint2)
-        path.close()
-        return path
-    }
-
     static func generateArrowHeadStrokePath(from annotation: Annotation, pass: Int) -> NSBezierPath {
         let path = NSBezierPath()
         guard annotation.type == .arrow,
@@ -414,8 +396,6 @@ class RoughPathGenerator {
     private struct ArrowGeometry {
         let control: CGPoint
         let shaftEnd: CGPoint
-        let headPoint1: CGPoint
-        let headPoint2: CGPoint
         let direction: CGPoint
         let normal: CGPoint
         let headLength: CGFloat
@@ -451,12 +431,8 @@ class RoughPathGenerator {
         let direction = CGPoint(x: cos(angle), y: sin(angle))
         let normal = CGPoint(x: -sin(angle), y: cos(angle))
         let shaftEnd = CGPoint(x: end.x - headLength * 1.02 * direction.x, y: end.y - headLength * 1.02 * direction.y)
-        let p1 = CGPoint(x: end.x - headLength * cos(angle) - headWidth / 2 * sin(angle),
-                         y: end.y - headLength * sin(angle) + headWidth / 2 * cos(angle))
-        let p2 = CGPoint(x: end.x - headLength * cos(angle) + headWidth / 2 * sin(angle),
-                         y: end.y - headLength * sin(angle) - headWidth / 2 * cos(angle))
 
-        return ArrowGeometry(control: finalControl, shaftEnd: shaftEnd, headPoint1: p1, headPoint2: p2, direction: direction, normal: normal, headLength: headLength, headWidth: headWidth)
+        return ArrowGeometry(control: finalControl, shaftEnd: shaftEnd, direction: direction, normal: normal, headLength: headLength, headWidth: headWidth)
     }
 
     private static func rectangleOutlinePoints(for rect: CGRect) -> [CGPoint] {

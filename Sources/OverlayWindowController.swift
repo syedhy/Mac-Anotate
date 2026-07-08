@@ -195,6 +195,7 @@ class OverlayWindowController: NSWindowController, NSWindowDelegate {
             window.ignoresMouseEvents = true
             toolbarHostingView.isHidden = true
             hideShortcutHelp()
+            hideClearPrompt()
 
             // Clear annotations if setting is on
             if SettingsStore.shared.clearOnExit {
@@ -234,15 +235,33 @@ class OverlayWindowController: NSWindowController, NSWindowDelegate {
         DispatchQueue.main.async {
             let granted = PermissionManager.shared.requestScreenRecordingPermissionIfNeeded()
 
-            if wasOverlayActive {
-                self.resumeOverlayAfterSystemPrompt()
-            }
-
             if granted {
+                if wasOverlayActive {
+                    self.resumeOverlayAfterSystemPrompt()
+                }
                 self.canvasView.exportAnnotations()
             } else {
-                NSSound.beep()
+                self.showScreenRecordingPermissionAlert(resumeOverlay: wasOverlayActive)
             }
+        }
+    }
+
+    private func showScreenRecordingPermissionAlert(resumeOverlay: Bool) {
+        let alert = NSAlert()
+        alert.messageText = "Screen Recording Permission Needed"
+        alert.informativeText = "Export PNG needs Screen Recording permission to capture the screen behind your annotations."
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "Open Settings")
+        alert.addButton(withTitle: "Cancel")
+
+        NSApp.activate(ignoringOtherApps: true)
+        let response = alert.runModal()
+
+        if response == .alertFirstButtonReturn {
+            isOverlayActive = false
+            PermissionManager.shared.openScreenRecordingSettings()
+        } else if resumeOverlay {
+            resumeOverlayAfterSystemPrompt()
         }
     }
 

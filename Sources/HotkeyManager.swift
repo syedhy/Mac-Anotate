@@ -24,7 +24,6 @@ class HotkeyManager {
         eventType.eventKind = OSType(kEventHotKeyPressed)
         
         let handler: EventHandlerUPP = { (nextHandler, theEvent, userData) -> OSStatus in
-            print("Mac Annotate: Hotkey pressed!")
             HotkeyManager.shared.onHotkeyPressed?()
             return noErr
         }
@@ -42,8 +41,6 @@ class HotkeyManager {
         
         if status != noErr {
             print("Error registering global hotkey: \(status)")
-        } else {
-            print("Global hotkey registered successfully.")
         }
     }
     

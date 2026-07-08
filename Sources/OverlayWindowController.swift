@@ -219,7 +219,49 @@ class OverlayWindowController: NSWindowController, NSWindowDelegate {
     }
 
     func exportAnnotations() {
+        guard PermissionManager.shared.hasScreenRecordingPermission else {
+            requestScreenRecordingPermissionForExport()
+            return
+        }
+
         canvasView.exportAnnotations()
+    }
+
+    private func requestScreenRecordingPermissionForExport() {
+        let wasOverlayActive = isOverlayActive
+        suspendOverlayForSystemPrompt()
+
+        DispatchQueue.main.async {
+            let granted = PermissionManager.shared.requestScreenRecordingPermissionIfNeeded()
+
+            if wasOverlayActive {
+                self.resumeOverlayAfterSystemPrompt()
+            }
+
+            if granted {
+                self.canvasView.exportAnnotations()
+            } else {
+                NSSound.beep()
+            }
+        }
+    }
+
+    private func suspendOverlayForSystemPrompt() {
+        guard isOverlayActive, let window = self.window else { return }
+        window.ignoresMouseEvents = true
+        toolbarHostingView.isHidden = true
+        window.orderOut(nil)
+        NSApp.hide(nil)
+    }
+
+    private func resumeOverlayAfterSystemPrompt() {
+        guard isOverlayActive, let window = self.window else { return }
+        moveOverlayToCursorScreen()
+        window.ignoresMouseEvents = false
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+        toolbarHostingView.isHidden = false
+        window.makeFirstResponder(canvasView)
     }
 
     func updateSelectedFillStyle(_ style: ShapeFillStyle) {

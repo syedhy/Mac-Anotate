@@ -22,9 +22,29 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         
         // Make sure it doesn't show in dock
         NSApp.setActivationPolicy(.accessory)
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+            PermissionManager.shared.requestScreenRecordingPermissionIfNeeded()
+        }
     }
 
     func applicationWillTerminate(_ aNotification: Notification) {
         HotkeyManager.shared.unregisterGlobalHotkey()
+    }
+}
+
+class PermissionManager {
+    static let shared = PermissionManager()
+
+    private init() {}
+
+    var hasScreenRecordingPermission: Bool {
+        CGPreflightScreenCaptureAccess()
+    }
+
+    @discardableResult
+    func requestScreenRecordingPermissionIfNeeded() -> Bool {
+        guard !hasScreenRecordingPermission else { return true }
+        return CGRequestScreenCaptureAccess()
     }
 }

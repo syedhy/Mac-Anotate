@@ -130,8 +130,7 @@ class AnnotationRenderer {
                 case .filled:
                     color.setFill()
                     boxPath.fill()
-                    // Ensure text has contrast
-                    textColor = color == .white ? .black : .white
+                    textColor = color.filledTextColor
                 }
                 
                 drawText(text, in: rect, color: textColor, fontSize: annotation.fontSize)

@@ -7,7 +7,7 @@ enum ShapeFillStyle: Int, Codable {
 }
 
 struct Annotation: Identifiable {
-    let id = UUID()
+    var id = UUID()
     let type: ToolType
     var color: NSColor
     var strokeWidth: CGFloat
@@ -86,5 +86,19 @@ struct Annotation: Identifiable {
         default:
             points = points.map(scalePoint)
         }
+    }
+
+    mutating func offsetBy(dx: CGFloat, dy: CGFloat) {
+        func offsetPoint(_ point: CGPoint) -> CGPoint {
+            CGPoint(x: point.x + dx, y: point.y + dy)
+        }
+
+        points = points.map(offsetPoint)
+
+        if let start = arrowStart { arrowStart = offsetPoint(start) }
+        if let end = arrowEnd { arrowEnd = offsetPoint(end) }
+        if let control = arrowControlPoint { arrowControlPoint = offsetPoint(control) }
+        if let r = rect { rect = r.offsetBy(dx: dx, dy: dy) }
+        if let r = textRect { textRect = r.offsetBy(dx: dx, dy: dy) }
     }
 }

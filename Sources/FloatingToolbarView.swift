@@ -247,16 +247,6 @@ struct FloatingToolbarView: View {
             .customTooltip("Export PNG")
 
             Button(action: {
-                overlayController?.showShortcutHelp()
-            }) {
-                Image(systemName: "questionmark.circle")
-                    .frame(width: 32, height: 32)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(PlainButtonStyle())
-            .customTooltip("Shortcuts")
-
-            Button(action: {
                 settings.isToolbarHidden = true
             }) {
                 Image(systemName: "eye.slash.fill")

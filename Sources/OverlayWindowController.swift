@@ -440,6 +440,7 @@ struct ShortcutHelpView: View {
         ("Actions", [
             ("Cmd+Z", "Undo"),
             ("Cmd+Shift+Z", "Redo"),
+            ("Cmd+D", "Duplicate"),
             ("C", "Clear"),
             ("H", "Hide toolbar"),
             ("Esc", "Close overlay")
@@ -452,7 +453,7 @@ struct ShortcutHelpView: View {
                 VStack(alignment: .leading, spacing: 3) {
                     Text("Quick shortcuts")
                         .font(.system(size: 18, weight: .semibold))
-                    Text("Shown once. Open it again from the ? button.")
+                    Text("Shown once. Hover toolbar buttons for hints later.")
                         .font(.system(size: 12))
                         .foregroundColor(.secondary)
                         .lineLimit(1)

@@ -206,4 +206,12 @@ extension NSColor {
 
         self.init(red: r, green: g, blue: b, alpha: 1.0)
     }
+
+    var filledTextColor: NSColor {
+        guard let rgbColor = usingColorSpace(.deviceRGB) else { return .white }
+        let isWhiteFill = rgbColor.redComponent > 0.92
+            && rgbColor.greenComponent > 0.92
+            && rgbColor.blueComponent > 0.92
+        return isWhiteFill ? .black : .white
+    }
 }

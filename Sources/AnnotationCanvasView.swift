@@ -133,6 +133,30 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
         needsDisplay = true
     }
 
+    private func duplicateSelectedAnnotations() {
+        commitTextEditingIfActive()
+
+        let selectedIDs = SelectionManager.shared.selectedAnnotationIDs
+        let selectedAnnotations = annotations.filter { selectedIDs.contains($0.id) && $0.type != .laserPen }
+        guard !selectedAnnotations.isEmpty else {
+            NSSound.beep()
+            return
+        }
+
+        let duplicates = selectedAnnotations.map { annotation in
+            var copy = annotation
+            copy.id = UUID()
+            copy.offsetBy(dx: 16, dy: -16)
+            return copy
+        }
+
+        annotations.append(contentsOf: duplicates)
+        redoStack.removeAll()
+        SelectionManager.shared.selectedAnnotationIDs = Set(duplicates.map { $0.id })
+        SelectionManager.shared.wasMarqueeSelected = duplicates.count > 1
+        needsDisplay = true
+    }
+
     func exportAnnotations() {
         commitTextEditingIfActive()
 
@@ -176,6 +200,7 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
     private func pngData(for annotations: [Annotation]) -> Data? {
         let width = max(1, Int(bounds.width.rounded(.up)))
         let height = max(1, Int(bounds.height.rounded(.up)))
+        guard let screenImage = screenCaptureExcludingOverlay() else { return nil }
 
         guard let bitmap = NSBitmapImageRep(
             bitmapDataPlanes: nil,
@@ -198,11 +223,31 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
 
         NSGraphicsContext.saveGraphicsState()
         NSGraphicsContext.current = graphicsContext
-        graphicsContext.cgContext.clear(CGRect(origin: .zero, size: bounds.size))
+        NSImage(cgImage: screenImage, size: bounds.size).draw(
+            in: bounds,
+            from: .zero,
+            operation: .copy,
+            fraction: 1.0
+        )
         AnnotationRenderer.draw(annotations, in: graphicsContext.cgContext, showsSelection: false)
         NSGraphicsContext.restoreGraphicsState()
 
         return bitmap.representation(using: .png, properties: [:])
+    }
+
+    private func screenCaptureExcludingOverlay() -> CGImage? {
+        guard let window else { return nil }
+
+        let viewRectInWindow = convert(bounds, to: nil)
+        let screenRect = window.convertToScreen(viewRectInWindow)
+        guard screenRect.width > 0, screenRect.height > 0 else { return nil }
+
+        return CGWindowListCreateImage(
+            screenRect,
+            .optionOnScreenBelowWindow,
+            CGWindowID(window.windowNumber),
+            [.bestResolution, .boundsIgnoreFraming]
+        )
     }
 
     override func keyDown(with event: NSEvent) {
@@ -264,6 +309,12 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
             SelectionManager.shared.selectedAnnotationIDs = Set(annotations.filter { $0.type != .laserPen }.map { $0.id })
             SelectionManager.shared.wasMarqueeSelected = true
             needsDisplay = true
+            return
+        }
+
+        // Command + D for Duplicate
+        if characters.lowercased() == "d" && event.modifierFlags.contains(.command) {
+            duplicateSelectedAnnotations()
             return
         }
 
@@ -946,7 +997,7 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
         case .filled:
             textView.drawsBackground = true
             textView.backgroundColor = color
-            textView.textColor = color == .white ? .black : .white
+            textView.textColor = color.filledTextColor
             textView.textContainerInset = NSSize(width: 12, height: 12)
         }
 

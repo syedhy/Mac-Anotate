@@ -151,10 +151,10 @@ class RoughPathGenerator {
             appendVariableArrow(to: path, annotation: annotation, random: &random)
         case .rectangle:
             guard let rect = annotation.rect, rect.width > 1, rect.height > 1 else { return path }
-            appendVariablePolyline(to: path, points: rectangleOutlinePoints(for: rect), baseWidth: annotation.strokeWidth, random: &random, closed: true, profile: .closedShape)
+            appendVariablePolyline(to: path, points: rectangleOutlinePoints(for: rect), baseWidth: annotation.strokeWidth, random: &random, closed: true, profile: .stroke)
         case .oval:
             guard let rect = annotation.rect, rect.width > 1, rect.height > 1 else { return path }
-            appendVariablePolyline(to: path, points: ovalOutlinePoints(for: rect), baseWidth: annotation.strokeWidth, random: &random, closed: true, profile: .closedShape)
+            appendVariablePolyline(to: path, points: ovalOutlinePoints(for: rect), baseWidth: annotation.strokeWidth, random: &random, closed: true, profile: .stroke)
         default:
             break
         }
@@ -196,18 +196,16 @@ class RoughPathGenerator {
         let headLength = arrow.headLength
         let headWidth = arrow.headWidth
         let leftBase = CGPoint(
-            x: end.x - arrow.direction.x * headLength * 0.92 - arrow.normal.x * headWidth * 0.50,
-            y: end.y - arrow.direction.y * headLength * 0.92 - arrow.normal.y * headWidth * 0.50
+            x: end.x - arrow.direction.x * headLength * 0.88 - arrow.normal.x * headWidth * 0.48,
+            y: end.y - arrow.direction.y * headLength * 0.88 - arrow.normal.y * headWidth * 0.48
         )
         let rightBase = CGPoint(
-            x: end.x - arrow.direction.x * headLength * 0.84 + arrow.normal.x * headWidth * 0.44,
-            y: end.y - arrow.direction.y * headLength * 0.84 + arrow.normal.y * headWidth * 0.44
+            x: end.x - arrow.direction.x * headLength * 0.88 + arrow.normal.x * headWidth * 0.48,
+            y: end.y - arrow.direction.y * headLength * 0.88 + arrow.normal.y * headWidth * 0.48
         )
-        path.move(to: leftBase)
-        path.line(to: end)
-        path.line(to: rightBase)
-        path.line(to: leftBase)
-        path.close()
+
+        var random = SeededRandom(seed: seed)
+        appendVariablePolyline(to: path, points: [leftBase, end, rightBase, leftBase], baseWidth: annotation.dynamicArrowStrokeWidth * 1.18, random: &random, closed: false, profile: .stroke)
         return path
     }
 
@@ -438,7 +436,7 @@ class RoughPathGenerator {
         let angle = atan2(dyCtrl, dxCtrl)
         let direction = CGPoint(x: cos(angle), y: sin(angle))
         let normal = CGPoint(x: -sin(angle), y: cos(angle))
-        let shaftEnd = CGPoint(x: end.x - headLength * 0.96 * direction.x, y: end.y - headLength * 0.96 * direction.y)
+        let shaftEnd = CGPoint(x: end.x - headLength * 0.88 * direction.x, y: end.y - headLength * 0.88 * direction.y)
         let p1 = CGPoint(x: end.x - headLength * cos(angle) - headWidth / 2 * sin(angle),
                          y: end.y - headLength * sin(angle) + headWidth / 2 * cos(angle))
         let p2 = CGPoint(x: end.x - headLength * cos(angle) + headWidth / 2 * sin(angle),

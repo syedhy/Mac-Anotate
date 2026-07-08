@@ -203,19 +203,10 @@ class RoughPathGenerator {
             x: end.x - arrow.direction.x * headLength * 0.84 + arrow.normal.x * headWidth * 0.44,
             y: end.y - arrow.direction.y * headLength * 0.84 + arrow.normal.y * headWidth * 0.44
         )
-        let baseMid = CGPoint(
-            x: (leftBase.x + rightBase.x) / 2,
-            y: (leftBase.y + rightBase.y) / 2
-        )
-        let baseControl = CGPoint(
-            x: baseMid.x + arrow.direction.x * headLength * 0.07,
-            y: baseMid.y + arrow.direction.y * headLength * 0.07
-        )
-
         path.move(to: leftBase)
         path.line(to: end)
         path.line(to: rightBase)
-        path.curve(to: leftBase, controlPoint1: baseControl, controlPoint2: baseControl)
+        path.line(to: leftBase)
         path.close()
         return path
     }
@@ -234,31 +225,31 @@ class RoughPathGenerator {
         let holdMax: UInt32
 
         static let stroke = WidthProfile(
-            initialMin: 0.76,
-            initialMax: 1.26,
-            targetMin: 0.68,
-            targetMax: 1.38,
-            clampMin: 0.72,
-            clampMax: 1.34,
-            driftMin: 0.26,
-            driftMax: 0.40,
-            wobble: 0.026,
+            initialMin: 0.72,
+            initialMax: 1.32,
+            targetMin: 0.62,
+            targetMax: 1.46,
+            clampMin: 0.68,
+            clampMax: 1.42,
+            driftMin: 0.28,
+            driftMax: 0.42,
+            wobble: 0.03,
             holdMin: 5,
             holdMax: 8
         )
 
         static let closedShape = WidthProfile(
-            initialMin: 0.96,
-            initialMax: 1.06,
-            targetMin: 0.92,
-            targetMax: 1.10,
-            clampMin: 0.94,
-            clampMax: 1.08,
-            driftMin: 0.12,
-            driftMax: 0.22,
-            wobble: 0.006,
-            holdMin: 12,
-            holdMax: 18
+            initialMin: 0.92,
+            initialMax: 1.10,
+            targetMin: 0.86,
+            targetMax: 1.18,
+            clampMin: 0.90,
+            clampMax: 1.15,
+            driftMin: 0.14,
+            driftMax: 0.24,
+            wobble: 0.008,
+            holdMin: 11,
+            holdMax: 17
         )
     }
 

@@ -188,8 +188,7 @@ class AnnotationRenderer {
             let headPath = RoughPathGenerator.generateArrowHeadStrokePath(from: annotation, pass: 0)
             headPath.lineWidth = annotation.dynamicArrowStrokeWidth * 1.22
             headPath.lineCapStyle = .round
-            headPath.lineJoinStyle = .miter
-            headPath.miterLimit = 3.0
+            headPath.lineJoinStyle = .round
             color.setStroke()
             headPath.stroke()
 

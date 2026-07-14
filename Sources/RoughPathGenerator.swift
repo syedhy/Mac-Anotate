@@ -171,7 +171,7 @@ class RoughPathGenerator {
         }
 
         let seed = annotation.roughnessSeed &+ UInt32(pass * 7351) &+ 19_171
-        guard let arrow = arrowGeometry(start: start, end: end, control: annotation.arrowControlPoint, strokeWidth: annotation.dynamicArrowStrokeWidth, seed: seed) else {
+        guard let arrow = arrowGeometry(start: start, end: end, control: annotation.arrowControlPoint, strokeWidth: annotation.dynamicArrowStrokeWidth, seed: seed, hasHead: true) else {
             return path
         }
 
@@ -389,7 +389,8 @@ class RoughPathGenerator {
     private static func appendVariableArrow(to path: NSBezierPath, annotation: Annotation, random: inout SeededRandom) {
         guard let start = annotation.arrowStart, let end = annotation.arrowEnd else { return }
         let strokeWidth = annotation.dynamicArrowStrokeWidth
-        guard let arrow = arrowGeometry(start: start, end: end, control: annotation.arrowControlPoint, strokeWidth: strokeWidth, seed: random.state) else { return }
+        let hasHead = annotation.type == .arrow
+        guard let arrow = arrowGeometry(start: start, end: end, control: annotation.arrowControlPoint, strokeWidth: strokeWidth, seed: random.state, hasHead: hasHead) else { return }
         appendVariablePolyline(to: path, points: sampleQuadratic(from: start, control: arrow.control, to: arrow.shaftEnd, steps: 22), baseWidth: strokeWidth, random: &random, closed: false, profile: .stroke)
     }
 
@@ -402,7 +403,7 @@ class RoughPathGenerator {
         let headWidth: CGFloat
     }
 
-    private static func arrowGeometry(start: CGPoint, end: CGPoint, control: CGPoint?, strokeWidth: CGFloat, seed: UInt32) -> ArrowGeometry? {
+    private static func arrowGeometry(start: CGPoint, end: CGPoint, control: CGPoint?, strokeWidth: CGFloat, seed: UInt32, hasHead: Bool) -> ArrowGeometry? {
         var random = SeededRandom(seed: seed)
         let dx = end.x - start.x
         let dy = end.y - start.y
@@ -423,13 +424,18 @@ class RoughPathGenerator {
             finalControl = CGPoint(x: baseControl.x + varX, y: baseControl.y + varY)
         }
 
-        let headLength = strokeWidth * 5.35
-        let headWidth = strokeWidth * 4.85
+        let maxHeadLength = length * 0.8
+        let desiredHeadLength = hasHead ? strokeWidth * 5.35 : 0.0
+        let headLength = min(desiredHeadLength, maxHeadLength)
+        
+        let headWidth = (hasHead && desiredHeadLength > 0) ? (strokeWidth * 4.85) * (headLength / desiredHeadLength) : 0.0
+        
         let dxCtrl = end.x - finalControl.x
         let dyCtrl = end.y - finalControl.y
         let angle = atan2(dyCtrl, dxCtrl)
         let direction = CGPoint(x: cos(angle), y: sin(angle))
         let normal = CGPoint(x: -sin(angle), y: cos(angle))
+        
         let shaftEnd = CGPoint(x: end.x - headLength * 1.02 * direction.x, y: end.y - headLength * 1.02 * direction.y)
 
         return ArrowGeometry(control: finalControl, shaftEnd: shaftEnd, direction: direction, normal: normal, headLength: headLength, headWidth: headWidth)

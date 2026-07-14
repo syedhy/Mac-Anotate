@@ -5,6 +5,7 @@ enum ToolType: String, CaseIterable {
     case select
     case pen
     case arrow
+    case line
     case rectangle
     case oval
     case text
@@ -15,6 +16,7 @@ enum ToolType: String, CaseIterable {
         case .select: return "cursorarrow"
         case .pen: return "scribble.variable"
         case .arrow: return "location.north"
+        case .line: return "line.diagonal"
         case .rectangle: return "rectangle"
         case .oval: return "circle"
         case .text: return "character.cursor.ibeam"
@@ -28,6 +30,7 @@ enum ToolType: String, CaseIterable {
         case .select: return "Select"
         case .pen: return "Pen"
         case .arrow: return "Arrow"
+        case .line: return "Line"
         case .rectangle: return "Rectangle"
         case .oval: return "Oval"
         case .text: return "Text"
@@ -41,6 +44,7 @@ enum ToolType: String, CaseIterable {
         case .select: return "v"
         case .pen: return "p"
         case .arrow: return "a"
+        case .line: return "i"
         case .rectangle: return "r"
         case .oval: return "o"
         case .text: return "t"

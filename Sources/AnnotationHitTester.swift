@@ -15,7 +15,7 @@ struct AnnotationHitTester {
         if let handles = getHandles(for: annotation) {
             for (i, handle) in handles.enumerated() {
                 if point.distance(to: handle) <= hitTolerance {
-                    if annotation.type == .arrow && i == 1 {
+                    if (annotation.type == .arrow || annotation.type == .line) && i == 1 {
                         return .controlHandle(index: i)
                     }
                     return .resizeHandle(index: i)
@@ -40,7 +40,7 @@ struct AnnotationHitTester {
                 }
                 prevPoint = currentPoint
             }
-        case .arrow:
+        case .arrow, .line:
             guard let start = annotation.arrowStart, let end = annotation.arrowEnd else { return .none }
             let baseControl = annotation.arrowControlPoint ?? CGPoint(x: (start.x + end.x) / 2, y: (start.y + end.y) / 2)
             
@@ -66,8 +66,8 @@ struct AnnotationHitTester {
             let dyCtrl = end.y - finalControl.y
             let angle = atan2(dyCtrl, dxCtrl)
             let dynamicStrokeWidth = min(16.0, max(2.0, length / 30.0))
-            let headLength = dynamicStrokeWidth * 3.5
-            let headWidth = dynamicStrokeWidth * 3.0
+            let headLength = annotation.type == .arrow ? dynamicStrokeWidth * 3.5 : 0
+            let headWidth = annotation.type == .arrow ? dynamicStrokeWidth * 3.0 : 0
             let shaftEnd = CGPoint(x: end.x - headLength * cos(angle), y: end.y - headLength * sin(angle))
             
             var minDistance: CGFloat = .infinity
@@ -83,16 +83,18 @@ struct AnnotationHitTester {
                 prevPoint = currentPoint
             }
             
-            let p1 = CGPoint(x: end.x - headLength * cos(angle) - headWidth/2 * sin(angle),
-                             y: end.y - headLength * sin(angle) + headWidth/2 * cos(angle))
-            let p2 = CGPoint(x: end.x - headLength * cos(angle) + headWidth/2 * sin(angle),
-                             y: end.y - headLength * sin(angle) - headWidth/2 * cos(angle))
-            
-            let d1 = distanceToSegment(p: point, a: end, b: p1)
-            let d2 = distanceToSegment(p: point, a: p1, b: p2)
-            let d3 = distanceToSegment(p: point, a: p2, b: end)
-            
-            minDistance = min(minDistance, min(d1, min(d2, d3)))
+            if annotation.type == .arrow {
+                let p1 = CGPoint(x: end.x - headLength * cos(angle) - headWidth/2 * sin(angle),
+                                 y: end.y - headLength * sin(angle) + headWidth/2 * cos(angle))
+                let p2 = CGPoint(x: end.x - headLength * cos(angle) + headWidth/2 * sin(angle),
+                                 y: end.y - headLength * sin(angle) - headWidth/2 * cos(angle))
+                
+                let d1 = distanceToSegment(p: point, a: end, b: p1)
+                let d2 = distanceToSegment(p: point, a: p1, b: p2)
+                let d3 = distanceToSegment(p: point, a: p2, b: end)
+                
+                minDistance = min(minDistance, min(d1, min(d2, d3)))
+            }
             
             if minDistance < hitTolerance { return .body }
         case .rectangle, .oval:
@@ -115,11 +117,11 @@ struct AnnotationHitTester {
     
     static func getHandles(for annotation: Annotation) -> [CGPoint]? {
         switch annotation.type {
-        case .arrow:
+        case .arrow, .line:
             guard let start = annotation.arrowStart, let end = annotation.arrowEnd else { return nil }
             let control = annotation.arrowControlPoint ?? CGPoint(x: (start.x + end.x)/2, y: (start.y + end.y)/2)
             let strokeW = annotation.dynamicArrowStrokeWidth
-            let headL = strokeW * 3.5
+            let headL = annotation.type == .arrow ? strokeW * 3.5 : 0
             let dxCtrl = end.x - control.x
             let dyCtrl = end.y - control.y
             let angle = atan2(dyCtrl, dxCtrl)
@@ -194,7 +196,7 @@ struct AnnotationHitTester {
         switch annotation.type {
         case .rectangle, .oval:
             return annotation.rect ?? .zero
-        case .arrow:
+        case .arrow, .line:
             return getRenderedArrowBoundingBox(for: annotation)
         case .pen, .laserPen:
             guard !annotation.points.isEmpty else { return .zero }
@@ -222,9 +224,11 @@ struct AnnotationHitTester {
         let shaftPath = RoughPathGenerator.generateVariableStrokePath(from: annotation, pass: 0)
         var boundingBox = shaftPath.bounds
 
-        let headPath = RoughPathGenerator.generateArrowHeadStrokePath(from: annotation, pass: 0)
-        let headBox = headPath.bounds
-        boundingBox = boundingBox.isEmpty ? headBox : boundingBox.union(headBox)
+        if annotation.type == .arrow {
+            let headPath = RoughPathGenerator.generateArrowHeadStrokePath(from: annotation, pass: 0)
+            let headBox = headPath.bounds
+            boundingBox = boundingBox.isEmpty ? headBox : boundingBox.union(headBox)
+        }
 
         return boundingBox
     }

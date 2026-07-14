@@ -552,7 +552,7 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
             }
         }
 
-        if tool == .arrow {
+        if tool == .arrow || tool == .line {
             currentAnnotation?.arrowStart = point
             currentAnnotation?.arrowEnd = point
         } else if tool == .rectangle || tool == .oval {
@@ -580,7 +580,7 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
         case .drawingNewAnnotation:
             guard var current = currentAnnotation else { return }
 
-            if current.type == .arrow {
+            if current.type == .arrow || current.type == .line {
                 current.arrowEnd = point
                 current.arrowControlPoint = CGPoint(x: (current.arrowStart!.x + point.x) / 2, y: (current.arrowStart!.y + point.y) / 2)
             } else if current.type == .rectangle || current.type == .oval {
@@ -613,7 +613,7 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
             for (id, originalAnnotation) in originalAnnotations {
                 guard let index = annotations.firstIndex(where: { $0.id == id }) else { continue }
                 var moved = originalAnnotation
-                if moved.type == .arrow {
+                if moved.type == .arrow || moved.type == .line {
                     moved.arrowStart = CGPoint(x: moved.arrowStart!.x + dx, y: moved.arrowStart!.y + dy)
                     moved.arrowEnd = CGPoint(x: moved.arrowEnd!.x + dx, y: moved.arrowEnd!.y + dy)
                     if let ctrl = moved.arrowControlPoint {
@@ -640,7 +640,7 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
             let dy = point.y - startPoint.y
 
             var resized = originalAnnotation
-            if resized.type == .arrow {
+            if resized.type == .arrow || resized.type == .line {
                 if handleIndex == 0 {
                     resized.arrowStart = CGPoint(x: resized.arrowStart!.x + dx, y: resized.arrowStart!.y + dy)
                 } else if handleIndex == 1 {
@@ -835,7 +835,7 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
             guard var finalAnnotation = currentAnnotation else { return }
 
             var annotationAdded = false
-            if finalAnnotation.type == .arrow {
+            if finalAnnotation.type == .arrow || finalAnnotation.type == .line {
                 finalAnnotation.arrowEnd = point
                 // Only create the arrow if the user dragged a minimum distance
                 if let start = finalAnnotation.arrowStart, start.distance(to: point) > 5.0 {
@@ -1362,6 +1362,7 @@ struct SelectionPropertiesPanel: View {
     private var annotationName: String {
         switch annotationType {
         case .arrow: return "Arrow"
+        case .line: return "Line"
         case .rectangle: return "Rectangle"
         case .oval: return "Oval"
         case .text: return "Text"

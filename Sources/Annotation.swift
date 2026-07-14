@@ -53,7 +53,7 @@ struct Annotation: Identifiable {
     }
     
     var dynamicArrowStrokeWidth: CGFloat {
-        guard type == .arrow, let start = arrowStart, let end = arrowEnd else { return strokeWidth }
+        guard (type == .arrow || type == .line), let start = arrowStart, let end = arrowEnd else { return strokeWidth }
         let length = hypot(end.x - start.x, end.y - start.y)
         let scale = length / 150.0
         return min(strokeWidth * 1.5, max(strokeWidth * 0.5, strokeWidth * scale))
@@ -75,7 +75,7 @@ struct Annotation: Identifiable {
         self.fontSize *= factor
         
         switch type {
-        case .arrow:
+        case .arrow, .line:
             if let s = arrowStart { arrowStart = scalePoint(s) }
             if let e = arrowEnd { arrowEnd = scalePoint(e) }
             if let c = arrowControlPoint { arrowControlPoint = scalePoint(c) }

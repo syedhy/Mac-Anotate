@@ -73,7 +73,7 @@ class RoughPathGenerator {
                 }
             }
 
-        case .arrow:
+        case .arrow, .line:
             guard let start = annotation.arrowStart, let end = annotation.arrowEnd else { return path }
             let dx = end.x - start.x
             let dy = end.y - start.y
@@ -147,7 +147,7 @@ class RoughPathGenerator {
         case .pen:
             let smoothedPoints = smoothPointsChaikin(annotation.points, iterations: 1)
             appendVariablePolyline(to: path, points: smoothedPoints, baseWidth: annotation.strokeWidth, random: &random, closed: false, profile: .stroke)
-        case .arrow:
+        case .arrow, .line:
             appendVariableArrow(to: path, annotation: annotation, random: &random)
         case .rectangle:
             guard let rect = annotation.rect, rect.width > 1, rect.height > 1 else { return path }

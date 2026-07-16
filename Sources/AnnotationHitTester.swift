@@ -11,6 +11,12 @@ struct AnnotationHitTester {
     }
     
     static func hitTest(point: CGPoint, annotation: Annotation) -> HitResult {
+        // Fast path: check bounding box first
+        let bb = getBoundingBox(for: annotation)
+        if !bb.insetBy(dx: -hitTolerance, dy: -hitTolerance).contains(point) {
+            return .none
+        }
+        
         // First check handles
         if let handles = getHandles(for: annotation) {
             for (i, handle) in handles.enumerated() {
@@ -221,11 +227,11 @@ struct AnnotationHitTester {
     private static func getRenderedArrowBoundingBox(for annotation: Annotation) -> CGRect {
         guard annotation.arrowStart != nil, annotation.arrowEnd != nil else { return .zero }
 
-        let shaftPath = RoughPathGenerator.generateVariableStrokePath(from: annotation, pass: 0)
+        let shaftPath = AnnotationRenderer.cachedVariableStrokePath(from: annotation, pass: 0)
         var boundingBox = shaftPath.bounds
 
         if annotation.type == .arrow {
-            let headPath = RoughPathGenerator.generateArrowHeadStrokePath(from: annotation, pass: 0)
+            let headPath = AnnotationRenderer.cachedArrowHeadPath(from: annotation, pass: 0)
             let headBox = headPath.bounds
             boundingBox = boundingBox.isEmpty ? headBox : boundingBox.union(headBox)
         }

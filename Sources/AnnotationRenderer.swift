@@ -1,8 +1,56 @@
 import Cocoa
 
 class AnnotationRenderer {
+    struct CacheEntry {
+        var version: Int
+        var paths: [Int: NSBezierPath] = [:]
+        var headPaths: [Int: NSBezierPath] = [:]
+        var doodlePaths: [Int: NSBezierPath] = [:]
+    }
+    private static var pathCache: [UUID: CacheEntry] = [:]
+    
+    static func cachedVariableStrokePath(from annotation: Annotation, pass: Int) -> NSBezierPath {
+        if let cached = pathCache[annotation.id], cached.version == annotation.version, let path = cached.paths[pass] {
+            return path
+        }
+        let path = RoughPathGenerator.generateVariableStrokePath(from: annotation, pass: pass)
+        var entry = pathCache[annotation.id] ?? CacheEntry(version: annotation.version)
+        if entry.version != annotation.version { entry = CacheEntry(version: annotation.version) }
+        entry.paths[pass] = path
+        pathCache[annotation.id] = entry
+        return path
+    }
+    
+    static func cachedDoodlePath(from annotation: Annotation, pass: Int) -> NSBezierPath {
+        if let cached = pathCache[annotation.id], cached.version == annotation.version, let path = cached.doodlePaths[pass] {
+            return path
+        }
+        let path = RoughPathGenerator.generateDoodlePath(from: annotation, pass: pass)
+        var entry = pathCache[annotation.id] ?? CacheEntry(version: annotation.version)
+        if entry.version != annotation.version { entry = CacheEntry(version: annotation.version) }
+        entry.doodlePaths[pass] = path
+        pathCache[annotation.id] = entry
+        return path
+    }
+    
+    static func cachedArrowHeadPath(from annotation: Annotation, pass: Int) -> NSBezierPath {
+        if let cached = pathCache[annotation.id], cached.version == annotation.version, let path = cached.headPaths[pass] {
+            return path
+        }
+        let path = RoughPathGenerator.generateArrowHeadStrokePath(from: annotation, pass: pass)
+        var entry = pathCache[annotation.id] ?? CacheEntry(version: annotation.version)
+        if entry.version != annotation.version { entry = CacheEntry(version: annotation.version) }
+        entry.headPaths[pass] = path
+        pathCache[annotation.id] = entry
+        return path
+    }
     
     static func draw(_ annotations: [Annotation], in context: CGContext, isDragging: Bool = false, isResizing: Bool = false, hoveredID: UUID? = nil, marqueeRect: CGRect? = nil, showsSelection: Bool = true) {
+        // Occasional cleanup
+        if pathCache.count > annotations.count + 100 {
+            let validIDs = Set(annotations.map { $0.id })
+            pathCache = pathCache.filter { validIDs.contains($0.key) }
+        }
         let now = Date()
         
         for annotation in annotations {
@@ -174,25 +222,25 @@ class AnnotationRenderer {
             path.stroke()
             
         } else if annotation.type == .pen {
-            let path1 = RoughPathGenerator.generateVariableStrokePath(from: annotation, pass: 0)
+            let path1 = cachedVariableStrokePath(from: annotation, pass: 0)
             color.setFill()
             path1.fill()
         } else if annotation.type == .arrow || annotation.type == .line {
             context.beginTransparencyLayer(auxiliaryInfo: nil)
 
-            let arrowPath = RoughPathGenerator.generateVariableStrokePath(from: annotation, pass: 0)
+            let arrowPath = cachedVariableStrokePath(from: annotation, pass: 0)
             color.setFill()
             arrowPath.fill()
 
             if annotation.type == .arrow {
-                let headPath = RoughPathGenerator.generateArrowHeadStrokePath(from: annotation, pass: 0)
+                let headPath = cachedArrowHeadPath(from: annotation, pass: 0)
                 color.setFill()
                 headPath.fill()
             }
 
             context.endTransparencyLayer()
         } else if annotation.type == .rectangle || annotation.type == .oval {
-            let path1 = RoughPathGenerator.generateDoodlePath(from: annotation, pass: 0)
+            let path1 = cachedDoodlePath(from: annotation, pass: 0)
             
             // Fill style rendering
             switch annotation.fillStyle {
@@ -217,7 +265,7 @@ class AnnotationRenderer {
             // Selection handles will be drawn below
         } else {
             // Pass 0: Main filled shape
-            let path1 = RoughPathGenerator.generateDoodlePath(from: annotation, pass: 0)
+            let path1 = cachedDoodlePath(from: annotation, pass: 0)
             color.setFill()
             path1.fill()
             
@@ -229,7 +277,7 @@ class AnnotationRenderer {
             path1.stroke()
             
             // Pass 1: Soft offset shape for double-stroke effect
-            let path2 = RoughPathGenerator.generateDoodlePath(from: annotation, pass: 1)
+            let path2 = cachedDoodlePath(from: annotation, pass: 1)
             let softColor = color.withAlphaComponent(0.35)
             softColor.setFill()
             path2.fill()

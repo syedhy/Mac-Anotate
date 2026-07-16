@@ -8,29 +8,30 @@ enum ShapeFillStyle: Int, Codable {
 
 struct Annotation: Identifiable {
     var id = UUID()
+    var version: Int = 0
     let type: ToolType
-    var color: NSColor
-    var strokeWidth: CGFloat
-    var fillStyle: ShapeFillStyle = .hollow
+    var color: NSColor { didSet { version += 1 } }
+    var strokeWidth: CGFloat { didSet { version += 1 } }
+    var fillStyle: ShapeFillStyle = .hollow { didSet { version += 1 } }
     let roughnessSeed: UInt32
     let createdAt: Date
-    var expiresAt: Date?
+    var expiresAt: Date? { didSet { version += 1 } }
     
     // For pen and laser
-    var points: [CGPoint] = []
+    var points: [CGPoint] = [] { didSet { version += 1 } }
     
     // For arrows
-    var arrowStart: CGPoint?
-    var arrowEnd: CGPoint?
-    var arrowControlPoint: CGPoint?
+    var arrowStart: CGPoint? { didSet { version += 1 } }
+    var arrowEnd: CGPoint? { didSet { version += 1 } }
+    var arrowControlPoint: CGPoint? { didSet { version += 1 } }
     
     // For rectangles and ovals
-    var rect: CGRect?
+    var rect: CGRect? { didSet { version += 1 } }
     
     // For text
-    var text: String?
-    var textRect: CGRect?
-    var fontSize: CGFloat = 28.0
+    var text: String? { didSet { version += 1 } }
+    var textRect: CGRect? { didSet { version += 1 } }
+    var fontSize: CGFloat = 28.0 { didSet { version += 1 } }
     
     static func fontSize(for strokeWidth: CGFloat) -> CGFloat {
         switch strokeWidth {

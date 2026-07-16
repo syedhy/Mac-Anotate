@@ -287,6 +287,10 @@ class OverlayWindowController: NSWindowController, NSWindowDelegate {
         canvasView.updateSelectedFillStyle(style)
     }
 
+    @objc func colorPanelColorDidChange(_ sender: NSColorPanel) {
+        SettingsStore.shared.lastSelectedColor = sender.color
+    }
+
     private var dragMouseOffset: CGSize = .zero
     private var isDraggingToPill: Bool = false
 

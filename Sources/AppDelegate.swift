@@ -12,6 +12,20 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Setup menu bar
         menuBarController = MenuBarController(overlayController: overlayWindowController)
         
+        // Ensure color panel appears over overlay
+        NSColorPanel.shared.level = NSWindow.Level(Int(NSWindow.Level.screenSaver.rawValue) + 1)
+        NSColorPanel.shared.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        
+        let maintainLevel = { (notification: Notification) in
+            if NSColorPanel.shared.level.rawValue <= NSWindow.Level.screenSaver.rawValue {
+                NSColorPanel.shared.level = NSWindow.Level(Int(NSWindow.Level.screenSaver.rawValue) + 1)
+            }
+        }
+        
+        NotificationCenter.default.addObserver(forName: NSWindow.didBecomeKeyNotification, object: NSColorPanel.shared, queue: .main, using: maintainLevel)
+        NotificationCenter.default.addObserver(forName: NSWindow.didBecomeMainNotification, object: NSColorPanel.shared, queue: .main, using: maintainLevel)
+        NotificationCenter.default.addObserver(forName: NSColorPanel.colorDidChangeNotification, object: NSColorPanel.shared, queue: .main, using: maintainLevel)
+        
         // Initialize HotkeyManager to listen for the global shortcut
         HotkeyManager.shared.onHotkeyPressed = { [weak self] in
             self?.overlayWindowController?.toggleOverlay()

@@ -71,6 +71,7 @@ struct FloatingToolbarView: View {
         .black
     ]
 
+    @State private var showColorPopover = false
     @State private var dragOffset = CGSize.zero
     @State private var isDragging: Bool = false
     @State private var wasToolbarBeforeDrag: Bool = false
@@ -128,20 +129,88 @@ struct FloatingToolbarView: View {
             orientationDivider()
 
             // Colors
-            innerLayout {
-                ForEach(colors, id: \.self) { color in
+            Button(action: {
+                showColorPopover.toggle()
+            }) {
+                ZStack {
                     Circle()
-                        .fill(Color(nsColor: color))
-                        .frame(width: 20, height: 20)
-                        .overlay(
-                            Circle()
-                                .stroke(Color.white, lineWidth: settings.lastSelectedColor == color ? 2 : 0)
-                        )
-                        .shadow(radius: 1)
-                        .onTapGesture {
-                            settings.lastSelectedColor = color
-                        }
+                        .fill(AngularGradient(gradient: Gradient(colors: [.red, .orange, .yellow, .green, .blue, .purple, .red]), center: .center))
+                        .frame(width: 22, height: 22)
+                    Circle()
+                        .fill(Color(nsColor: settings.lastSelectedColor))
+                        .frame(width: 12, height: 12)
+                        .overlay(Circle().stroke(Color.white, lineWidth: 1))
                 }
+                .contentShape(Circle())
+            }
+            .buttonStyle(PlainButtonStyle())
+            .customTooltip("Colors")
+            .popover(isPresented: $showColorPopover) {
+                VStack(spacing: 12) {
+                    Text("Presets")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    
+                    // Use standard HStack with wrapping or simple rows for better performance
+                    VStack(spacing: 8) {
+                        HStack(spacing: 8) {
+                            ForEach(colors.prefix(4), id: \.self) { color in
+                                Circle()
+                                    .fill(Color(nsColor: color))
+                                    .frame(width: 24, height: 24)
+                                    .overlay(
+                                        Circle().stroke(Color.white, lineWidth: settings.lastSelectedColor == color ? 2 : 0)
+                                    )
+                                    .shadow(radius: 1)
+                                    .onTapGesture {
+                                        settings.lastSelectedColor = color
+                                    }
+                            }
+                        }
+                        HStack(spacing: 8) {
+                            ForEach(colors.dropFirst(4), id: \.self) { color in
+                                Circle()
+                                    .fill(Color(nsColor: color))
+                                    .frame(width: 24, height: 24)
+                                    .overlay(
+                                        Circle().stroke(Color.white, lineWidth: settings.lastSelectedColor == color ? 2 : 0)
+                                    )
+                                    .shadow(radius: 1)
+                                    .onTapGesture {
+                                        settings.lastSelectedColor = color
+                                    }
+                            }
+                        }
+                    }
+                    
+                    Divider()
+                    
+                    HStack {
+                        Text("Custom")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Spacer()
+                        Button(action: {
+                            NSColorPanel.shared.color = settings.lastSelectedColor
+                            NSColorPanel.shared.setAction(#selector(OverlayWindowController.colorPanelColorDidChange(_:)))
+                            NSColorPanel.shared.setTarget(overlayController)
+                            NSColorPanel.shared.makeKeyAndOrderFront(nil)
+                            NSApp.activate(ignoringOtherApps: true)
+                        }) {
+                            ZStack {
+                                Circle()
+                                    .fill(AngularGradient(gradient: Gradient(colors: [.red, .orange, .yellow, .green, .blue, .purple, .red]), center: .center))
+                                    .frame(width: 24, height: 24)
+                                    .overlay(Circle().stroke(Color.white, lineWidth: 1))
+                            }
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                        .contentShape(Circle())
+                    }
+                }
+                .padding()
+                .frame(width: 140)
             }
 
             orientationDivider()

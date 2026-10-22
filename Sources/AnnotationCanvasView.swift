@@ -3,6 +3,56 @@ import Combine
 import SwiftUI
 import UniformTypeIdentifiers
 
+enum CustomCursors {
+    private static func createSymbolCursor(symbolName: String, pointSize: CGFloat = 18, fallback: NSCursor) -> NSCursor {
+        let size = NSSize(width: 24, height: 24)
+        let config = NSImage.SymbolConfiguration(pointSize: pointSize, weight: .bold)
+        guard let symbol = NSImage(systemSymbolName: symbolName, accessibilityDescription: nil)?.withSymbolConfiguration(config) else {
+            return fallback
+        }
+
+        let image = NSImage(size: size, flipped: false) { rect in
+            let symbolSize = symbol.size
+            let targetRect = NSRect(
+                x: (size.width - symbolSize.width) / 2,
+                y: (size.height - symbolSize.height) / 2,
+                width: symbolSize.width,
+                height: symbolSize.height
+            )
+
+            guard let ctx = NSGraphicsContext.current?.cgContext else { return false }
+
+            // 1. Draw crisp white outline glow for visibility on dark content
+            ctx.saveGState()
+            ctx.setShadow(offset: .zero, blur: 2.0, color: NSColor.white.cgColor)
+            symbol.draw(in: targetRect.insetBy(dx: -0.5, dy: -0.5))
+            ctx.restoreGState()
+
+            // 2. Draw black icon with subtle drop shadow
+            ctx.saveGState()
+            ctx.setShadow(offset: CGSize(width: 0, height: -1), blur: 1.5, color: NSColor.black.withAlphaComponent(0.4).cgColor)
+            symbol.draw(in: targetRect)
+            ctx.restoreGState()
+
+            return true
+        }
+
+        return NSCursor(image: image, hotSpot: NSPoint(x: size.width / 2, y: size.height / 2))
+    }
+
+    static let move: NSCursor = {
+        createSymbolCursor(symbolName: "arrow.up.and.down.and.arrow.left.and.right", pointSize: 18, fallback: .openHand)
+    }()
+
+    static let resizeDiagonalNWSE: NSCursor = {
+        createSymbolCursor(symbolName: "arrow.up.left.and.arrow.down.right", pointSize: 16, fallback: .crosshair)
+    }()
+
+    static let resizeDiagonalNESW: NSCursor = {
+        createSymbolCursor(symbolName: "arrow.up.right.and.arrow.down.left", pointSize: 16, fallback: .crosshair)
+    }()
+}
+
 class AnnotationCanvasView: NSView, NSTextViewDelegate {
 
     private var annotations: [Annotation] = []
@@ -27,7 +77,7 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
         if let ta = trackingArea {
             removeTrackingArea(ta)
         }
-        trackingArea = NSTrackingArea(rect: bounds, options: [.activeInKeyWindow, .mouseMoved, .inVisibleRect], owner: self, userInfo: nil)
+        trackingArea = NSTrackingArea(rect: bounds, options: [.activeInKeyWindow, .mouseMoved, .cursorUpdate, .mouseEnteredAndExited, .inVisibleRect], owner: self, userInfo: nil)
         addTrackingArea(trackingArea!)
     }
 
@@ -398,6 +448,98 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
 
     private var interactionState: InteractionState = .idle
 
+    // MARK: - Cursor Management
+
+    func cursorForPoint(_ point: CGPoint) -> NSCursor {
+        // 1. If an annotation is selected, check if point is over its handles or body
+        if !SelectionManager.shared.selectedAnnotationIDs.isEmpty {
+            for selectedID in SelectionManager.shared.selectedAnnotationIDs {
+                if let index = annotations.firstIndex(where: { $0.id == selectedID }) {
+                    let hit = AnnotationHitTester.hitTest(point: point, annotation: annotations[index])
+                    switch hit {
+                    case .resizeHandle(let idx), .controlHandle(let idx):
+                        return cursorForHandle(idx, on: annotations[index])
+                    case .body:
+                        return CustomCursors.move
+                    case .none:
+                        break
+                    }
+                }
+            }
+
+            // Check group bounding box handle or body (if multiple items selected)
+            if let groupBB = AnnotationHitTester.getGroupBoundingBox(for: annotations, selectedIDs: SelectionManager.shared.selectedAnnotationIDs) {
+                let shouldShowGroupBB = SelectionManager.shared.selectedAnnotationIDs.count > 1 || (SelectionManager.shared.selectedAnnotationIDs.count == 1 && SelectionManager.shared.wasMarqueeSelected)
+                if shouldShowGroupBB {
+                    let groupHandle = CGPoint(x: groupBB.maxX, y: groupBB.maxY)
+                    if point.distance(to: groupHandle) < 15.0 {
+                        return CustomCursors.resizeDiagonalNESW
+                    }
+                    if groupBB.contains(point) {
+                        return CustomCursors.move
+                    }
+                }
+            }
+        }
+
+        // 2. If in Select mode:
+        if ToolManager.shared.activeTool == .select {
+            for annotation in annotations.reversed() {
+                if AnnotationHitTester.hitTest(point: point, annotation: annotation) != .none {
+                    return CustomCursors.move
+                }
+            }
+            return .arrow
+        }
+
+        // 3. If drawing tool is active:
+        return .crosshair
+    }
+
+    func cursorForHandle(_ handleIndex: Int, on annotation: Annotation) -> NSCursor {
+        switch annotation.type {
+        case .rectangle, .oval:
+            // 0: bottom-left (NESW)
+            // 1: bottom-right (NWSE)
+            // 2: top-left (NWSE)
+            // 3: top-right (NESW)
+            if handleIndex == 0 || handleIndex == 3 {
+                return CustomCursors.resizeDiagonalNESW
+            } else {
+                return CustomCursors.resizeDiagonalNWSE
+            }
+        case .arrow, .line:
+            // 0: start, 1: control, 2: end
+            return .crosshair
+        case .pen, .laserPen:
+            return CustomCursors.resizeDiagonalNWSE
+        case .text:
+            if handleIndex == 0 || handleIndex == 1 {
+                return .resizeLeftRight
+            } else {
+                return CustomCursors.resizeDiagonalNWSE
+            }
+        default:
+            return .crosshair
+        }
+    }
+
+    override func cursorUpdate(with event: NSEvent) {
+        let point = convert(event.locationInWindow, from: nil)
+        cursorForPoint(point).set()
+    }
+
+    override func mouseEntered(with event: NSEvent) {
+        super.mouseEntered(with: event)
+        let point = convert(event.locationInWindow, from: nil)
+        cursorForPoint(point).set()
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        super.mouseExited(with: event)
+        NSCursor.arrow.set()
+    }
+
     override func mouseMoved(with event: NSEvent) {
         if activeTextView != nil { return }
 
@@ -413,7 +555,6 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
             }
         }
 
-
         if hoveredAnnotationID != newHover {
             hoveredAnnotationID = newHover
             needsDisplay = true
@@ -426,6 +567,9 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
             laserPointerLocation = nil
             needsDisplay = true
         }
+
+        // Show appropriate cursor for current hover target (move, resize handles, or drawing crosshair)
+        cursorForPoint(point).set()
     }
 
     override func mouseDown(with event: NSEvent) {
@@ -625,6 +769,7 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
             break
 
         case .drawingNewAnnotation:
+            NSCursor.crosshair.set()
             guard var current = currentAnnotation else { return }
 
             if current.type == .arrow || current.type == .line {
@@ -654,6 +799,7 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
             needsDisplay = true
 
         case .movingSelection(let startPoint, let originalAnnotations):
+            CustomCursors.move.set()
             let dx = point.x - startPoint.x
             let dy = point.y - startPoint.y
 
@@ -682,6 +828,7 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
             needsDisplay = true
 
         case .resizingSelection(let handleIndex, let startPoint, let originalAnnotation):
+            cursorForHandle(handleIndex, on: originalAnnotation).set()
             guard let index = annotations.firstIndex(where: { $0.id == originalAnnotation.id }) else { return }
             let dx = point.x - startPoint.x
             let dy = point.y - startPoint.y
@@ -803,6 +950,7 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
             needsDisplay = true
 
         case .resizingMultipleSelection(let startPoint, let originalAnnotations, let groupBB):
+            CustomCursors.resizeDiagonalNESW.set()
             // Scale relative to the bottom-left corner of the overall bounding box
             let origin = CGPoint(x: groupBB.minX, y: groupBB.minY)
             let initialDistance = startPoint.distance(to: origin)
@@ -947,6 +1095,7 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
 
         interactionState = .idle
         needsDisplay = true
+        cursorForPoint(point).set()
     }
     private var activeTextMaxWidth: CGFloat = 300.0
 

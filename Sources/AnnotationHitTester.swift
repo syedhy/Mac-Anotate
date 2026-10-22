@@ -13,7 +13,7 @@ struct AnnotationHitTester {
     static func hitTest(point: CGPoint, annotation: Annotation) -> HitResult {
         // Fast path: check bounding box first
         let bb = getBoundingBox(for: annotation)
-        if !bb.insetBy(dx: -hitTolerance, dy: -hitTolerance).contains(point) {
+        if !bb.insetBy(dx: -hitTolerance * 2, dy: -hitTolerance * 2).contains(point) {
             return .none
         }
         

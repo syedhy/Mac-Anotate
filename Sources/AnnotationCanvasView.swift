@@ -4,15 +4,20 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 enum CustomCursors {
-    private static func createSymbolCursor(symbolName: String, pointSize: CGFloat = 18, fallback: NSCursor) -> NSCursor {
+    private static func createWhiteSymbolCursor(symbolName: String, pointSize: CGFloat = 18, fallback: NSCursor) -> NSCursor {
         let size = NSSize(width: 24, height: 24)
-        let config = NSImage.SymbolConfiguration(pointSize: pointSize, weight: .bold)
-        guard let symbol = NSImage(systemSymbolName: symbolName, accessibilityDescription: nil)?.withSymbolConfiguration(config) else {
+        let whiteConfig = NSImage.SymbolConfiguration(pointSize: pointSize, weight: .bold)
+            .applying(.init(paletteColors: [NSColor.white]))
+        let blackConfig = NSImage.SymbolConfiguration(pointSize: pointSize, weight: .bold)
+            .applying(.init(paletteColors: [NSColor.black]))
+
+        guard let whiteSymbol = NSImage(systemSymbolName: symbolName, accessibilityDescription: nil)?.withSymbolConfiguration(whiteConfig),
+              let blackSymbol = NSImage(systemSymbolName: symbolName, accessibilityDescription: nil)?.withSymbolConfiguration(blackConfig) else {
             return fallback
         }
 
         let image = NSImage(size: size, flipped: false) { rect in
-            let symbolSize = symbol.size
+            let symbolSize = whiteSymbol.size
             let targetRect = NSRect(
                 x: (size.width - symbolSize.width) / 2,
                 y: (size.height - symbolSize.height) / 2,
@@ -22,17 +27,29 @@ enum CustomCursors {
 
             guard let ctx = NSGraphicsContext.current?.cgContext else { return false }
 
-            // 1. Draw crisp white outline glow for visibility on dark content
+            // 1. Draw subtle drop shadow behind the cursor
             ctx.saveGState()
-            ctx.setShadow(offset: .zero, blur: 2.0, color: NSColor.white.cgColor)
-            symbol.draw(in: targetRect.insetBy(dx: -0.5, dy: -0.5))
+            ctx.setShadow(offset: CGSize(width: 0, height: -1.5), blur: 2.0, color: NSColor.black.withAlphaComponent(0.6).cgColor)
+            blackSymbol.draw(in: targetRect)
             ctx.restoreGState()
 
-            // 2. Draw black icon with subtle drop shadow
-            ctx.saveGState()
-            ctx.setShadow(offset: CGSize(width: 0, height: -1), blur: 1.5, color: NSColor.black.withAlphaComponent(0.4).cgColor)
-            symbol.draw(in: targetRect)
-            ctx.restoreGState()
+            // 2. Draw 1px black outline for contrast on white/bright backgrounds
+            let offsets: [CGPoint] = [
+                CGPoint(x: -1, y: 0),
+                CGPoint(x: 1, y: 0),
+                CGPoint(x: 0, y: -1),
+                CGPoint(x: 0, y: 1),
+                CGPoint(x: -0.7, y: -0.7),
+                CGPoint(x: 0.7, y: -0.7),
+                CGPoint(x: -0.7, y: 0.7),
+                CGPoint(x: 0.7, y: 0.7)
+            ]
+            for offset in offsets {
+                blackSymbol.draw(in: targetRect.offsetBy(dx: offset.x, dy: offset.y))
+            }
+
+            // 3. Draw pure white symbol on top
+            whiteSymbol.draw(in: targetRect)
 
             return true
         }
@@ -41,15 +58,15 @@ enum CustomCursors {
     }
 
     static let move: NSCursor = {
-        createSymbolCursor(symbolName: "arrow.up.and.down.and.arrow.left.and.right", pointSize: 18, fallback: .openHand)
+        createWhiteSymbolCursor(symbolName: "arrow.up.and.down.and.arrow.left.and.right", pointSize: 18, fallback: .openHand)
     }()
 
     static let resizeDiagonalNWSE: NSCursor = {
-        createSymbolCursor(symbolName: "arrow.up.left.and.arrow.down.right", pointSize: 16, fallback: .crosshair)
+        createWhiteSymbolCursor(symbolName: "arrow.up.left.and.arrow.down.right", pointSize: 16, fallback: .crosshair)
     }()
 
     static let resizeDiagonalNESW: NSCursor = {
-        createSymbolCursor(symbolName: "arrow.up.right.and.arrow.down.left", pointSize: 16, fallback: .crosshair)
+        createWhiteSymbolCursor(symbolName: "arrow.up.right.and.arrow.down.left", pointSize: 16, fallback: .crosshair)
     }()
 }
 
@@ -67,7 +84,7 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
     private var activeTextView: NSTextView?
     private var trackingArea: NSTrackingArea?
     private var cancellables = Set<AnyCancellable>()
-    private var propertiesHostingView: NSHostingView<AnyView>!
+    private var propertiesHostingView: CursorResetHostingView<AnyView>!
     private var propertiesTrailingConstraint: NSLayoutConstraint!
 
     override var acceptsFirstResponder: Bool { true }
@@ -95,7 +112,7 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
         wantsLayer = true
         layer?.backgroundColor = NSColor.clear.cgColor
 
-        propertiesHostingView = NSHostingView(rootView: AnyView(EmptyView()))
+        propertiesHostingView = CursorResetHostingView(rootView: AnyView(EmptyView()))
         propertiesHostingView.isHidden = true
         propertiesHostingView.translatesAutoresizingMaskIntoConstraints = false
         self.addSubview(propertiesHostingView)
@@ -451,6 +468,16 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
     // MARK: - Cursor Management
 
     func cursorForPoint(_ point: CGPoint) -> NSCursor {
+        // 0. If hovering over toolbar, modal views, or properties panel, always show normal arrow
+        let pointInWindow = convert(point, to: nil)
+        if let overlay = window?.windowController as? OverlayWindowController,
+           overlay.isPointInInteractiveOverlay(pointInWindow) {
+            return .arrow
+        }
+        if !propertiesHostingView.isHidden && propertiesHostingView.frame.contains(point) {
+            return .arrow
+        }
+
         // 1. If an annotation is selected, check if point is over its handles or body
         if !SelectionManager.shared.selectedAnnotationIDs.isEmpty {
             for selectedID in SelectionManager.shared.selectedAnnotationIDs {
@@ -472,7 +499,7 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
                 let shouldShowGroupBB = SelectionManager.shared.selectedAnnotationIDs.count > 1 || (SelectionManager.shared.selectedAnnotationIDs.count == 1 && SelectionManager.shared.wasMarqueeSelected)
                 if shouldShowGroupBB {
                     let groupHandle = CGPoint(x: groupBB.maxX, y: groupBB.maxY)
-                    if point.distance(to: groupHandle) < 15.0 {
+                    if point.distance(to: groupHandle) <= AnnotationHitTester.handleHitRadius {
                         return CustomCursors.resizeDiagonalNESW
                     }
                     if groupBB.contains(point) {
@@ -664,7 +691,7 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
 
                 if shouldShowGroupBB {
                     let groupHandle = CGPoint(x: groupBB.maxX, y: groupBB.maxY)
-                    if point.distance(to: groupHandle) < 10.0 {
+                    if point.distance(to: groupHandle) <= AnnotationHitTester.handleHitRadius {
                         redoStack.removeAll()
                         interactionState = .resizingMultipleSelection(startPoint: point, originalAnnotations: originals, groupBoundingBox: groupBB)
                         return
@@ -1545,8 +1572,6 @@ struct SelectionPropertiesPanel: View {
         )
         .contentShape(Rectangle()) // Capture clicks anywhere on the panel
         .onTapGesture {}
-        // Ensure SwiftUI handles mouse clicks properly on the Mac transparent window
-        .onHover { _ in NSCursor.arrow.push() }
         .onAppear {
             localStrokeWidth = currentStrokeWidth
         }

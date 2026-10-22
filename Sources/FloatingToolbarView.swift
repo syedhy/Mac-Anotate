@@ -372,8 +372,6 @@ struct FloatingToolbarView: View {
                     overlayController?.snapToNearestEdge()
                 }
         )
-        // Ensure SwiftUI handles mouse clicks properly on the Mac transparent window
-        .onHover { _ in NSCursor.arrow.push() }
     }
 }
 

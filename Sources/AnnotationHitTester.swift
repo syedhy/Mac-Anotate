@@ -2,6 +2,7 @@ import Cocoa
 
 struct AnnotationHitTester {
     static let hitTolerance: CGFloat = 15.0
+    static let handleHitRadius: CGFloat = 8.0
     
     enum HitResult: Equatable {
         case none
@@ -17,10 +18,10 @@ struct AnnotationHitTester {
             return .none
         }
         
-        // First check handles
+        // First check handles (strictly on handle dots)
         if let handles = getHandles(for: annotation) {
             for (i, handle) in handles.enumerated() {
-                if point.distance(to: handle) <= hitTolerance {
+                if point.distance(to: handle) <= handleHitRadius {
                     if (annotation.type == .arrow || annotation.type == .line) && i == 1 {
                         return .controlHandle(index: i)
                     }
@@ -41,7 +42,7 @@ struct AnnotationHitTester {
             var prevPoint = annotation.points[0]
             for i in 1..<annotation.points.count {
                 let currentPoint = annotation.points[i]
-                if distanceToSegment(p: point, a: prevPoint, b: currentPoint) < hitTolerance {
+                if distanceToSegment(p: point, a: prevPoint, b: currentPoint) < max(8.0, annotation.strokeWidth) {
                     return .body
                 }
                 prevPoint = currentPoint
@@ -105,13 +106,13 @@ struct AnnotationHitTester {
             if minDistance < hitTolerance { return .body }
         case .rectangle, .oval:
             guard let rect = annotation.rect else { return .none }
-            // Check if inside or on edge (just inside for now)
-            if rect.insetBy(dx: -hitTolerance, dy: -hitTolerance).contains(point) {
+            let pad = max(2.0, annotation.strokeWidth / 2)
+            if rect.insetBy(dx: -pad, dy: -pad).contains(point) {
                 return .body
             }
         case .text:
             guard let rect = annotation.textRect else { return .none }
-            if rect.insetBy(dx: -hitTolerance, dy: -hitTolerance).contains(point) {
+            if rect.insetBy(dx: -6, dy: -6).contains(point) {
                 return .body
             }
         case .select, .laserPointer:

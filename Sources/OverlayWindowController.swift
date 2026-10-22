@@ -7,10 +7,48 @@ class OverlayWindow: NSWindow {
     }
 }
 
+class CursorResetHostingView<Content: View>: NSHostingView<Content> {
+    private var trackingArea: NSTrackingArea?
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let ta = trackingArea {
+            removeTrackingArea(ta)
+        }
+        let ta = NSTrackingArea(
+            rect: bounds,
+            options: [.activeInKeyWindow, .mouseMoved, .cursorUpdate, .mouseEnteredAndExited, .inVisibleRect],
+            owner: self,
+            userInfo: nil
+        )
+        addTrackingArea(ta)
+        trackingArea = ta
+    }
+
+    override func resetCursorRects() {
+        super.resetCursorRects()
+        addCursorRect(bounds, cursor: .arrow)
+    }
+
+    override func mouseMoved(with event: NSEvent) {
+        NSCursor.arrow.set()
+        super.mouseMoved(with: event)
+    }
+
+    override func mouseEntered(with event: NSEvent) {
+        NSCursor.arrow.set()
+        super.mouseEntered(with: event)
+    }
+
+    override func cursorUpdate(with event: NSEvent) {
+        NSCursor.arrow.set()
+    }
+}
+
 class OverlayWindowController: NSWindowController, NSWindowDelegate {
 
     private var canvasView: AnnotationCanvasView!
-    private var toolbarHostingView: NSHostingView<FloatingToolbarView>!
+    private var toolbarHostingView: CursorResetHostingView<FloatingToolbarView>!
 
     // Constraints for free dragging
     private var toolbarLeftConstraint: NSLayoutConstraint!
@@ -68,7 +106,7 @@ class OverlayWindowController: NSWindowController, NSWindowDelegate {
 
         // Setup Toolbar
         let toolbarView = FloatingToolbarView(overlayController: self, toolManager: ToolManager.shared)
-        toolbarHostingView = NSHostingView(rootView: toolbarView)
+        toolbarHostingView = CursorResetHostingView(rootView: toolbarView)
         toolbarHostingView.translatesAutoresizingMaskIntoConstraints = false
 
         contentView.addSubview(toolbarHostingView)
@@ -100,7 +138,7 @@ class OverlayWindowController: NSWindowController, NSWindowDelegate {
                 self?.hideClearPrompt()
             }
         )
-        clearPromptHostingView = NSHostingView(rootView: clearPrompt)
+        clearPromptHostingView = CursorResetHostingView(rootView: clearPrompt)
         clearPromptHostingView.translatesAutoresizingMaskIntoConstraints = false
 
         let shortcutHelp = ShortcutHelpView(
@@ -108,12 +146,29 @@ class OverlayWindowController: NSWindowController, NSWindowDelegate {
                 self?.hideShortcutHelp()
             }
         )
-        shortcutHelpHostingView = NSHostingView(rootView: shortcutHelp)
+        shortcutHelpHostingView = CursorResetHostingView(rootView: shortcutHelp)
         shortcutHelpHostingView.translatesAutoresizingMaskIntoConstraints = false
     }
 
-    private var clearPromptHostingView: NSHostingView<ClearPromptView>!
-    private var shortcutHelpHostingView: NSHostingView<ShortcutHelpView>!
+    private var clearPromptHostingView: CursorResetHostingView<ClearPromptView>!
+    private var shortcutHelpHostingView: CursorResetHostingView<ShortcutHelpView>!
+
+    func isPointInInteractiveOverlay(_ pointInWindow: CGPoint) -> Bool {
+        guard isOverlayActive else { return false }
+        if toolbarHostingView != nil && !toolbarHostingView.isHidden {
+            let p = toolbarHostingView.convert(pointInWindow, from: nil)
+            if toolbarHostingView.bounds.contains(p) { return true }
+        }
+        if clearPromptHostingView != nil && !clearPromptHostingView.isHidden && clearPromptHostingView.superview != nil {
+            let p = clearPromptHostingView.convert(pointInWindow, from: nil)
+            if clearPromptHostingView.bounds.contains(p) { return true }
+        }
+        if shortcutHelpHostingView != nil && !shortcutHelpHostingView.isHidden && shortcutHelpHostingView.superview != nil {
+            let p = shortcutHelpHostingView.convert(pointInWindow, from: nil)
+            if shortcutHelpHostingView.bounds.contains(p) { return true }
+        }
+        return false
+    }
 
     private static func overlayFrame(for screen: NSScreen?) -> NSRect {
         let screen = screen ?? NSScreen.main

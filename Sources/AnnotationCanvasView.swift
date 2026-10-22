@@ -253,25 +253,32 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
     override func keyDown(with event: NSEvent) {
         guard let characters = event.characters else { return }
 
-        // Esc cancels drawing or switches to select
+        // Esc key handling
         if event.keyCode == 53 {
+            if let appDelegate = NSApp.delegate as? AppDelegate {
+                appDelegate.overlayWindowController?.hideShortcutHelp()
+            }
+
             if currentAnnotation != nil {
-                // Cancel current drawing
+                // Cancel current drawing in progress
                 currentAnnotation = nil
-                needsDisplay = true
-            } else if ToolManager.shared.activeTool != .select {
-                // Switch to select tool and select the last drawn annotation
-                ToolManager.shared.activeTool = .select
-                if let last = annotations.last, last.type != .laserPen, last.type != .pen {
-                    SelectionManager.shared.selectedAnnotationIDs = [last.id]
-                }
-                needsDisplay = true
-            } else if !SelectionManager.shared.selectedAnnotationIDs.isEmpty {
-                // Clear selection
                 SelectionManager.shared.clearSelection()
+                ToolManager.shared.activeTool = .select
+                needsDisplay = true
+                return
+            }
+
+            let hasSelection = !SelectionManager.shared.selectedAnnotationIDs.isEmpty
+            let isNotSelectTool = ToolManager.shared.activeTool != .select
+
+            if hasSelection || isNotSelectTool {
+                // First Escape press: Deselect the active shape (hide transform/resize handles)
+                // and switch the active tool to the Selection/Pointer tool.
+                SelectionManager.shared.clearSelection()
+                ToolManager.shared.activeTool = .select
                 needsDisplay = true
             } else {
-                // Toggle overlay if already in select mode with no selection
+                // Second Escape press: Hide/minimize the application window.
                 if let appDelegate = NSApp.delegate as? AppDelegate {
                     appDelegate.overlayWindowController?.toggleOverlay()
                 } else {
@@ -397,7 +404,7 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
         let point = convert(event.locationInWindow, from: nil)
         var newHover: UUID? = nil
 
-        if ToolManager.shared.activeTool == .select {
+        if ToolManager.shared.activeTool == .select || !SelectionManager.shared.selectedAnnotationIDs.isEmpty {
             for annotation in annotations.reversed() {
                 if AnnotationHitTester.hitTest(point: point, annotation: annotation) != .none {
                     newHover = annotation.id
@@ -435,6 +442,30 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
                 return
             }
 
+            // Check if user clicked an already selected text's handles or body
+            if !SelectionManager.shared.selectedAnnotationIDs.isEmpty {
+                for selectedID in SelectionManager.shared.selectedAnnotationIDs {
+                    if let index = annotations.firstIndex(where: { $0.id == selectedID }) {
+                        let hit = AnnotationHitTester.hitTest(point: point, annotation: annotations[index])
+                        switch hit {
+                        case .resizeHandle(let idx), .controlHandle(let idx):
+                            if SelectionManager.shared.selectedAnnotationIDs.count == 1 && !SelectionManager.shared.wasMarqueeSelected {
+                                redoStack.removeAll()
+                                interactionState = .resizingSelection(handleIndex: idx, startPoint: point, originalAnnotation: annotations[index])
+                                return
+                            }
+                        case .body:
+                            if annotations[index].type == .text {
+                                startTextEditing(existingAnnotation: annotations[index], at: index)
+                                return
+                            }
+                        case .none:
+                            break
+                        }
+                    }
+                }
+            }
+
             SelectionManager.shared.clearSelection()
             needsDisplay = true
 
@@ -451,63 +482,62 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
             return
         }
 
-        // If in Select mode, check hit test
-        if tool == .select {
-
-            // First check if we clicked on an already selected annotation's handles
-            var clickedSelectedBody = false
-            if !SelectionManager.shared.selectedAnnotationIDs.isEmpty {
-                for selectedID in SelectionManager.shared.selectedAnnotationIDs {
-                    if let index = annotations.firstIndex(where: { $0.id == selectedID }) {
-                        let hit = AnnotationHitTester.hitTest(point: point, annotation: annotations[index])
-                        switch hit {
-                        case .resizeHandle(let idx), .controlHandle(let idx):
-                            if SelectionManager.shared.selectedAnnotationIDs.count == 1 && !SelectionManager.shared.wasMarqueeSelected {
-                                interactionState = .resizingSelection(handleIndex: idx, startPoint: point, originalAnnotation: annotations[index])
-                                return
-                            }
-                        case .body:
-                            if event.clickCount == 2 && annotations[index].type == .text && SelectionManager.shared.selectedAnnotationIDs.count == 1 {
-                                startTextEditing(existingAnnotation: annotations[index], at: index)
-                                return
-                            }
-                            clickedSelectedBody = true
-                        case .none:
-                            break
+        // Check if user clicked on an already selected annotation's handles or body (works for all tools!)
+        var clickedSelectedBody = false
+        if !SelectionManager.shared.selectedAnnotationIDs.isEmpty {
+            for selectedID in SelectionManager.shared.selectedAnnotationIDs {
+                if let index = annotations.firstIndex(where: { $0.id == selectedID }) {
+                    let hit = AnnotationHitTester.hitTest(point: point, annotation: annotations[index])
+                    switch hit {
+                    case .resizeHandle(let idx), .controlHandle(let idx):
+                        if SelectionManager.shared.selectedAnnotationIDs.count == 1 && !SelectionManager.shared.wasMarqueeSelected {
+                            redoStack.removeAll()
+                            interactionState = .resizingSelection(handleIndex: idx, startPoint: point, originalAnnotation: annotations[index])
+                            return
                         }
+                    case .body:
+                        if event.clickCount == 2 && annotations[index].type == .text && SelectionManager.shared.selectedAnnotationIDs.count == 1 {
+                            startTextEditing(existingAnnotation: annotations[index], at: index)
+                            return
+                        }
+                        clickedSelectedBody = true
+                    case .none:
+                        break
                     }
                 }
             }
 
             // Then check group bounding box for resizing (multiple items) or moving
-            if !SelectionManager.shared.selectedAnnotationIDs.isEmpty {
-                if let groupBB = AnnotationHitTester.getGroupBoundingBox(for: annotations, selectedIDs: SelectionManager.shared.selectedAnnotationIDs) {
-
-                    var originals: [UUID: Annotation] = [:]
-                    for id in SelectionManager.shared.selectedAnnotationIDs {
-                        if let ann = annotations.first(where: { $0.id == id }) {
-                            originals[id] = ann
-                        }
+            if let groupBB = AnnotationHitTester.getGroupBoundingBox(for: annotations, selectedIDs: SelectionManager.shared.selectedAnnotationIDs) {
+                var originals: [UUID: Annotation] = [:]
+                for id in SelectionManager.shared.selectedAnnotationIDs {
+                    if let ann = annotations.first(where: { $0.id == id }) {
+                        originals[id] = ann
                     }
+                }
 
-                    let shouldShowGroupBB = SelectionManager.shared.selectedAnnotationIDs.count > 1 || (SelectionManager.shared.selectedAnnotationIDs.count == 1 && SelectionManager.shared.wasMarqueeSelected)
+                let shouldShowGroupBB = SelectionManager.shared.selectedAnnotationIDs.count > 1 || (SelectionManager.shared.selectedAnnotationIDs.count == 1 && SelectionManager.shared.wasMarqueeSelected)
 
-                    if shouldShowGroupBB {
-                        let groupHandle = CGPoint(x: groupBB.maxX, y: groupBB.maxY)
-                        if point.distance(to: groupHandle) < 10.0 {
-                            interactionState = .resizingMultipleSelection(startPoint: point, originalAnnotations: originals, groupBoundingBox: groupBB)
-                            return
-                        }
-                    }
-
-                    if (shouldShowGroupBB && groupBB.contains(point)) || clickedSelectedBody {
-                        interactionState = .movingSelection(startPoint: point, originalAnnotations: originals)
+                if shouldShowGroupBB {
+                    let groupHandle = CGPoint(x: groupBB.maxX, y: groupBB.maxY)
+                    if point.distance(to: groupHandle) < 10.0 {
+                        redoStack.removeAll()
+                        interactionState = .resizingMultipleSelection(startPoint: point, originalAnnotations: originals, groupBoundingBox: groupBB)
                         return
                     }
                 }
-            }
 
-            // Otherwise, see if we hit another annotation body (not currently selected)
+                if (shouldShowGroupBB && groupBB.contains(point)) || clickedSelectedBody {
+                    redoStack.removeAll()
+                    interactionState = .movingSelection(startPoint: point, originalAnnotations: originals)
+                    return
+                }
+            }
+        }
+
+        // If in Select mode, check hit test for other annotations or start marquee
+        if tool == .select {
+            // See if we hit another annotation body (not currently selected)
             for (index, annotation) in annotations.enumerated().reversed() {
                 if AnnotationHitTester.hitTest(point: point, annotation: annotation) != .none {
                     if event.clickCount == 2 && annotation.type == .text {
@@ -532,13 +562,14 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
                             originals[id] = ann
                         }
                     }
+                    redoStack.removeAll()
                     interactionState = .movingSelection(startPoint: point, originalAnnotations: originals)
                     needsDisplay = true
                     return
                 }
             }
 
-            // Hit nothing, clear selection and start marquee
+            // Hit nothing in Select mode, clear selection and start marquee
             if !event.modifierFlags.contains(.shift) {
                 SelectionManager.shared.clearSelection()
             }
@@ -548,7 +579,8 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
             return
         }
 
-        // Otherwise, start drawing
+        // Otherwise, active drawing tool is enabled:
+        // Clicking or dragging on an empty canvas area immediately draws a new shape as usual (clearing selection from previous shape)
         redoStack.removeAll()
         SelectionManager.shared.clearSelection()
         interactionState = .drawingNewAnnotation
@@ -893,12 +925,12 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
                 }
             }
 
-            if !annotationAdded && ToolManager.shared.activeTool != .select && ToolManager.shared.activeTool != .text {
-                ToolManager.shared.activeTool = .select
-            }
-
-            if ToolManager.shared.activeTool == .select {
+            if annotationAdded && finalAnnotation.type != .laserPen {
+                // Auto-Select on Creation:
+                // Immediately select the newly created shape and show its transform handles
+                // while keeping the active drawing tool enabled.
                 SelectionManager.shared.selectedAnnotationIDs = [finalAnnotation.id]
+                SelectionManager.shared.wasMarqueeSelected = false
             } else {
                 SelectionManager.shared.clearSelection()
             }
@@ -1116,8 +1148,8 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
                 annotations[index].textRect = finalRect
                 annotations[index].fontSize = font.pointSize
                 redoStack.removeAll()
-                ToolManager.shared.activeTool = .select
                 SelectionManager.shared.selectedAnnotationIDs = [annotations[index].id]
+                SelectionManager.shared.wasMarqueeSelected = false
             } else {
                 var annotation = Annotation(type: .text, color: SettingsStore.shared.lastSelectedColor, strokeWidth: SettingsStore.shared.lastSelectedStrokeWidth)
                 annotation.text = text
@@ -1127,8 +1159,8 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
                 annotations.append(annotation)
                 redoStack.removeAll()
 
-                ToolManager.shared.activeTool = .select
                 SelectionManager.shared.selectedAnnotationIDs = [annotation.id]
+                SelectionManager.shared.wasMarqueeSelected = false
             }
         } else {
             // Empty text

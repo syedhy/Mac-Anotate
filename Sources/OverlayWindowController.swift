@@ -47,6 +47,7 @@ class OverlayWindowController: NSWindowController, NSWindowDelegate {
 
         overlayWindow.delegate = self
         setupViews()
+        overlayWindow.orderOut(nil)
     }
 
     required init?(coder: NSCoder) {
@@ -202,9 +203,21 @@ class OverlayWindowController: NSWindowController, NSWindowDelegate {
                 clearCanvas()
             }
 
+            window.orderOut(nil)
+
             // Deactivate and return focus to previous app
             NSApp.hide(nil)
         }
+    }
+
+    func hideOverlayForSettings() {
+        guard let window = self.window else { return }
+        isOverlayActive = false
+        window.ignoresMouseEvents = true
+        toolbarHostingView.isHidden = true
+        hideShortcutHelp()
+        hideClearPrompt()
+        window.orderOut(nil)
     }
 
     func clearCanvas() {
@@ -494,18 +507,21 @@ struct ShortcutHelpView: View {
 
     private let shortcutSections: [(String, [(String, String)])] = [
         ("Tools", [
+            ("V / S", "Select"),
             ("P", "Pen"),
+            ("L", "Line"),
             ("A", "Arrow"),
             ("R", "Rectangle"),
             ("O", "Oval"),
             ("T", "Text"),
-            ("V", "Select"),
-            ("L", "Laser tools")
+            ("B / W", "Laser (Beam/Wand)")
         ]),
         ("Actions", [
             ("Cmd+Z", "Undo"),
             ("Cmd+Shift+Z", "Redo"),
             ("Cmd+D", "Duplicate"),
+            ("Cmd+A", "Select all"),
+            ("F", "Cycle fill style"),
             ("C", "Clear"),
             ("H", "Hide toolbar"),
             ("Esc", "Close overlay")

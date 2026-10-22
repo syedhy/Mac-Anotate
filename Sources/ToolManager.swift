@@ -44,12 +44,12 @@ enum ToolType: String, CaseIterable {
         case .select: return "v"
         case .pen: return "p"
         case .arrow: return "a"
-        case .line: return "i"
+        case .line: return "l"
         case .rectangle: return "r"
         case .oval: return "o"
         case .text: return "t"
-        case .laserPointer: return "l"
-        case .laserPen: return "l"
+        case .laserPointer: return "b"
+        case .laserPen: return "w"
         }
     }
 }
@@ -64,12 +64,37 @@ class ToolManager: ObservableObject {
     func handleKeyPress(_ characters: String) -> Bool {
         let char = characters.lowercased()
         
-        if char == "l" {
+        // Laser toggle with 'b' (Laser Beam)
+        if char == "b" {
             if activeTool == .laserPointer {
                 activeTool = .laserPen
             } else {
                 activeTool = .laserPointer
             }
+            return true
+        }
+        
+        // Direct laser pen with 'w' (Wand)
+        if char == "w" {
+            activeTool = .laserPen
+            return true
+        }
+        
+        // Laser pointer alias 'k'
+        if char == "k" {
+            activeTool = .laserPointer
+            return true
+        }
+        
+        // Select tool aliases: 'v' or 's'
+        if char == "v" || char == "s" {
+            activeTool = .select
+            return true
+        }
+        
+        // Ellipse alias for oval: 'e'
+        if char == "e" {
+            activeTool = .oval
             return true
         }
         

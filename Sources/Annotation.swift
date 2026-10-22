@@ -7,31 +7,37 @@ enum ShapeFillStyle: Int, Codable {
 }
 
 struct Annotation: Identifiable {
+    private static var versionCounter: Int = 0
+    private static func nextVersion() -> Int {
+        versionCounter += 1
+        return versionCounter
+    }
+    
     var id = UUID()
     var version: Int = 0
     let type: ToolType
-    var color: NSColor { didSet { version += 1 } }
-    var strokeWidth: CGFloat { didSet { version += 1 } }
-    var fillStyle: ShapeFillStyle = .hollow { didSet { version += 1 } }
+    var color: NSColor { didSet { version = Annotation.nextVersion() } }
+    var strokeWidth: CGFloat { didSet { version = Annotation.nextVersion() } }
+    var fillStyle: ShapeFillStyle = .hollow { didSet { version = Annotation.nextVersion() } }
     let roughnessSeed: UInt32
     let createdAt: Date
-    var expiresAt: Date? { didSet { version += 1 } }
+    var expiresAt: Date? { didSet { version = Annotation.nextVersion() } }
     
     // For pen and laser
-    var points: [CGPoint] = [] { didSet { version += 1 } }
+    var points: [CGPoint] = [] { didSet { version = Annotation.nextVersion() } }
     
     // For arrows
-    var arrowStart: CGPoint? { didSet { version += 1 } }
-    var arrowEnd: CGPoint? { didSet { version += 1 } }
-    var arrowControlPoint: CGPoint? { didSet { version += 1 } }
+    var arrowStart: CGPoint? { didSet { version = Annotation.nextVersion() } }
+    var arrowEnd: CGPoint? { didSet { version = Annotation.nextVersion() } }
+    var arrowControlPoint: CGPoint? { didSet { version = Annotation.nextVersion() } }
     
     // For rectangles and ovals
-    var rect: CGRect? { didSet { version += 1 } }
+    var rect: CGRect? { didSet { version = Annotation.nextVersion() } }
     
     // For text
-    var text: String? { didSet { version += 1 } }
-    var textRect: CGRect? { didSet { version += 1 } }
-    var fontSize: CGFloat = 28.0 { didSet { version += 1 } }
+    var text: String? { didSet { version = Annotation.nextVersion() } }
+    var textRect: CGRect? { didSet { version = Annotation.nextVersion() } }
+    var fontSize: CGFloat = 28.0 { didSet { version = Annotation.nextVersion() } }
     
     static func fontSize(for strokeWidth: CGFloat) -> CGFloat {
         switch strokeWidth {

@@ -335,24 +335,39 @@ class AnnotationCanvasView: NSView, NSTextViewDelegate {
             return
         }
 
-        // R to toggle fill style
-        if characters.lowercased() == "r" {
-            if SelectionManager.shared.selectedAnnotationIDs.count == 1,
-               let id = SelectionManager.shared.selectedAnnotationIDs.first,
-               let index = annotations.firstIndex(where: { $0.id == id }) {
-                let ann = annotations[index]
-                if ann.type == .rectangle || ann.type == .oval || ann.type == .text {
-                    let nextStyle: ShapeFillStyle
-                    switch ann.fillStyle {
-                    case .hollow: nextStyle = .translucent
-                    case .translucent: nextStyle = .filled
-                    case .filled: nextStyle = .hollow
+        // F to toggle fill style
+        if characters.lowercased() == "f" {
+            if !SelectionManager.shared.selectedAnnotationIDs.isEmpty {
+                var modified = false
+                for id in SelectionManager.shared.selectedAnnotationIDs {
+                    if let index = annotations.firstIndex(where: { $0.id == id }) {
+                        let ann = annotations[index]
+                        if ann.type == .rectangle || ann.type == .oval || ann.type == .text {
+                            let nextStyle: ShapeFillStyle
+                            switch ann.fillStyle {
+                            case .hollow: nextStyle = .translucent
+                            case .translucent: nextStyle = .filled
+                            case .filled: nextStyle = .hollow
+                            }
+                            annotations[index].fillStyle = nextStyle
+                            modified = true
+                        }
                     }
-                    annotations[index].fillStyle = nextStyle
+                }
+                if modified {
                     redoStack.removeAll()
                     needsDisplay = true
                     return
                 }
+            } else {
+                let nextStyle: ShapeFillStyle
+                switch SettingsStore.shared.lastSelectedFillStyle {
+                case .hollow: nextStyle = .translucent
+                case .translucent: nextStyle = .filled
+                case .filled: nextStyle = .hollow
+                }
+                SettingsStore.shared.lastSelectedFillStyle = nextStyle
+                return
             }
         }
 

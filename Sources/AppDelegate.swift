@@ -2,6 +2,10 @@ import Cocoa
 
 class AppDelegate: NSObject, NSApplicationDelegate {
     
+    static var shared: AppDelegate? {
+        NSApplication.shared.delegate as? AppDelegate
+    }
+    
     var menuBarController: MenuBarController?
     var overlayWindowController: OverlayWindowController?
     

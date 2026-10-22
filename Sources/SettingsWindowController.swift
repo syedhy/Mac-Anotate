@@ -2,7 +2,7 @@ import SwiftUI
 import Cocoa
 import Carbon
 
-class SettingsWindowController: NSWindowController {
+class SettingsWindowController: NSWindowController, NSWindowDelegate {
     static let shared = SettingsWindowController()
     
     private init() {
@@ -14,6 +14,7 @@ class SettingsWindowController: NSWindowController {
         )
         window.title = "Mac Annotate Settings"
         window.titlebarAppearsTransparent = true
+        window.level = .floating
         window.center()
         window.setFrameAutosaveName("SettingsWindow")
         
@@ -21,6 +22,7 @@ class SettingsWindowController: NSWindowController {
         window.contentView = hostingView
         
         super.init(window: window)
+        window.delegate = self
     }
     
     required init?(coder: NSCoder) {
@@ -28,6 +30,10 @@ class SettingsWindowController: NSWindowController {
     }
     
     override func showWindow(_ sender: Any?) {
+        // Ensure no annotations or overlay are visible while user is in settings
+        AppDelegate.shared?.overlayWindowController?.hideOverlayForSettings()
+        NSColorPanel.shared.close()
+        
         super.showWindow(sender)
         window?.makeKeyAndOrderFront(sender)
         NSApp.activate(ignoringOtherApps: true)
@@ -161,17 +167,23 @@ struct SettingsView: View {
                             
                             Text("Tool Shortcuts (when active):")
                             
-                            LazyVGrid(columns: [GridItem(.fixed(120)), GridItem(.flexible())], alignment: .leading, spacing: 8) {
+                            LazyVGrid(columns: [GridItem(.fixed(130)), GridItem(.flexible())], alignment: .leading, spacing: 8) {
+                                ShortcutRow(key: "V / S", action: "Select")
                                 ShortcutRow(key: "P", action: "Pen")
+                                ShortcutRow(key: "L", action: "Line")
                                 ShortcutRow(key: "A", action: "Arrow")
                                 ShortcutRow(key: "R", action: "Rectangle")
                                 ShortcutRow(key: "O", action: "Oval")
                                 ShortcutRow(key: "T", action: "Text")
-                                ShortcutRow(key: "L", action: "Laser")
+                                ShortcutRow(key: "B", action: "Laser Pointer")
+                                ShortcutRow(key: "W", action: "Laser Pen")
+                                ShortcutRow(key: "F", action: "Cycle Fill Style")
                                 ShortcutRow(key: "C", action: "Clear All")
+                                ShortcutRow(key: "H", action: "Hide Toolbar")
                                 ShortcutRow(key: "Cmd+Z", action: "Undo")
                                 ShortcutRow(key: "Cmd+Shift+Z", action: "Redo")
                                 ShortcutRow(key: "Cmd+D", action: "Duplicate")
+                                ShortcutRow(key: "Cmd+A", action: "Select All")
                             }
                         }
                         .padding(16)

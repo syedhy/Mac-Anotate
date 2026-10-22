@@ -123,7 +123,7 @@ struct FloatingToolbarView: View {
                 ToolButton(tool: tool, isActive: toolManager.activeTool == tool) {
                     toolManager.activeTool = tool
                 }
-                .customTooltip("\(tool.name) (\(tool.keyEquivalent))")
+                .customTooltip("\(tool.name) (\(tool.keyEquivalent.uppercased()))")
             }
 
             orientationDivider()
@@ -270,7 +270,7 @@ struct FloatingToolbarView: View {
                 Image(systemName: "square.fill.on.square")
             }
             .frame(width: 40)
-            .customTooltip("Fill Style")
+            .customTooltip("Fill Style (F)")
 
             orientationDivider()
 
